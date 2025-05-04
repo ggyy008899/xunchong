@@ -1,0 +1,168 @@
+/* Add your CSS styles here */
+body {
+    font-family: sans-serif;
+    padding: 20px;
+}
+
+h1 {
+    color: #333;
+}
+
+a {
+    display: block;
+    margin-bottom: 10px;
+    color: #007bff;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* -- 启事卡片照片样式 -- */
+.photo-gallery {
+    margin-top: 10px;
+    display: flex; /* 让图片水平排列 */
+    flex-wrap: wrap; /* 允许图片换行 */
+    gap: 10px; /* 图片之间的间距 */
+}
+
+.pet-photo-thumbnail {
+    max-width: 100px; /* 限制最大宽度 */
+    max-height: 100px; /* 限制最大高度 */
+    border-radius: 5px; /* 圆角 */
+    object-fit: cover; /* 保持图片比例并裁剪 */
+    border: 1px solid #eee; /* 细边框 */
+}
+
+/* -- 表单图片预览样式 -- */
+#image-preview-container {
+    /* 之前的内联样式已经设置了 display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; */
+    /* 可以根据需要添加更多样式，比如最小高度 */
+    min-height: 105px; /* 至少能放下一行图片的高度 */
+    border: 1px dashed #ccc; /* 加个虚线边框便于识别区域 */
+    padding: 5px;
+    margin-bottom: 15px; /* 和其他表单项保持间距 */
+}
+
+.preview-thumbnail {
+    /* 复用首页缩略图样式 */
+    max-width: 100px;
+    max-height: 100px;
+    border-radius: 5px;
+    object-fit: cover;
+    border: 1px solid #eee;
+}
+
+/* -- 启事卡片样式 -- */
+.report-card {
+    /* 之前的内联样式：border: 1px solid #ccc; border-radius: 5px; padding: 15px; margin-bottom: 15px; */
+    background-color: #f9f9f9; /* 默认背景色 */
+    /* border, border-radius, padding, margin-bottom 保留在 HTML 的 style 属性中暂时不动 */
+}
+
+.report-card.is-found {
+    background-color: #e9f5e9; /* 已找到的淡绿色背景 */
+}
+
+/* -- '已找到' 标签和按钮样式 -- */
+.found-badge {
+    background-color: #28a745; /* 绿色背景 */
+    color: white; /* 白色文字 */
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-weight: bold;
+    margin-left: 10px; /* 和标题保持一点距离 */
+    vertical-align: middle; /* 垂直居中对齐 */
+}
+
+.found-time {
+    font-size: 0.8em;
+    color: #6c757d; /* 灰色文字 */
+    margin-left: 5px;
+    vertical-align: middle;
+}
+
+.mark-found-button {
+    background-color: #ffc107; /* 黄色背景 */
+    color: #333; /* 深灰色文字 */
+    border: none;
+    padding: 8px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    font-weight: bold;
+}
+
+.mark-found-button:hover {
+    background-color: #e0a800; /* 鼠标悬停时颜色变深 */
+}
+
+/* -- 搜索表单样式 -- */
+.search-form {
+    background-color: #f1f1f1;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    border: 1px solid #ddd;
+}
+
+.search-form .form-row {
+    display: flex;
+    flex-wrap: wrap; /* 允许换行 */
+    gap: 15px; /* 行内元素间距 */
+    margin-bottom: 10px; /* 行间距 */
+}
+
+.search-form .form-group {
+    display: flex;
+    flex-direction: column; /* 标签和输入框垂直排列 */
+    flex-grow: 1; /* 让组平分空间 */
+    min-width: 200px; /* 避免在窄屏时挤压太小 */
+}
+
+.search-form label {
+    margin-bottom: 5px;
+    font-weight: bold;
+    font-size: 0.9em;
+}
+
+.search-form input[type="text"],
+.search-form select {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box; /* 让 padding 不影响总宽度 */
+}
+
+.search-form .search-button,
+.search-form .clear-search-button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    text-decoration: none; /* for the link button */
+    text-align: center;
+}
+
+.search-form .search-button {
+    background-color: #007bff; /* 蓝色 */
+    color: white;
+    margin-right: 10px; /* 和清空按钮保持距离 */
+}
+
+.search-form .search-button:hover {
+    background-color: #0056b3;
+}
+
+.search-form .clear-search-button {
+    background-color: #6c757d; /* 灰色 */
+    color: white;
+    display: inline-block; /* Make the link behave like a button */
+}
+
+.search-form .clear-search-button:hover {
+    background-color: #5a6268;
+}

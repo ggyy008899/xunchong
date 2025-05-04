@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>发布寻宠启事</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    {% if baidu_map_ak %}
+    <script type="text/javascript" src="https://api.map.baidu.com/api?v=3.0&ak={{ baidu_map_ak }}"></script>
+    {% endif %}
+    <style>
+        label {
+            display: block;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        input[type=text],
+        input[type=datetime-local],
+        textarea,
+        select {
+            width: 95%; /* Adjusted for padding */
+            padding: 8px;
+            margin-top: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box; /* Include padding in width */
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .required::after {
+            content: " *";
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <h1>发布寻宠启事</h1>
+
+    {# --- Display Flashed Messages --- #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <ul class=flashes>
+        {% for category, message in messages %}
+          <li class="{{ category }}">{{ message }}</li>
+        {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+    {# ----------------------------- #}
+
+    <form action="{{ url_for('report_lost') }}" method="post" enctype="multipart/form-data">
+        <label for="pet_type" class="required">宠物种类:</label>
+        <select id="pet_type" name="pet_type" required>
+            <option value="" {% if not form_data or form_data.pet_type == '' %}selected{% endif %}>请选择</option>
+            <option value="猫" {% if form_data and form_data.pet_type == '猫' %}selected{% endif %}>猫</option>
+            <option value="狗" {% if form_data and form_data.pet_type == '狗' %}selected{% endif %}>狗</option>
+        </select>
+
+        <label for="breed" class="required">宠物品种:</label>
+        <select id="breed" name="breed" required onchange="checkOtherBreed(this.value)">
+            <option value="">-- 请先选择宠物种类 --</option>
+            {% if form_data and form_data.pet_type %}
+                {# Need JS to populate and select on load #}
+            {% endif %}
+        </select>
+
+        <div id="other_breed_div" style="display: none; margin-top: 5px;">
+            <label for="other_breed" class="required">请填写具体品种:</label>
+            <input type="text" id="other_breed" name="other_breed" value="{{ form_data.other_breed if form_data else '' }}">
+        </div>
+
+        <label for="color" class="required">宠物颜色:</label>
+        <input type="text" id="color" name="color" required value="{{ form_data.color if form_data else '' }}">
+
+        <label for="gender" class="required">性别:</label>
+        <select id="gender" name="gender" required>
+            <option value="" {% if not form_data or form_data.gender == '' %}selected{% endif %}>请选择</option>
+            <option value="雄性" {% if form_data and form_data.gender == '雄性' %}selected{% endif %}>雄性</option>
+            <option value="雌性" {% if form_data and form_data.gender == '雌性' %}selected{% endif %}>雌性</option>
+            <option value="未知" {% if form_data and form_data.gender == '未知' %}selected{% endif %}>未知</option>
+        </select>
+
+        <label for="age">年龄描述:</label>
+        <input type="text" id="age" name="age" placeholder="例如: 约2岁, 成年, 幼犬" value="{{ form_data.age if form_data else '' }}">
+
+        <label for="features" class="required">明显特征描述:</label>
+        <textarea id="features" name="features" required>{{ form_data.features if form_data else '' }}</textarea>
+
+        <label for="lost_time" class="required">丢失时间:</label>
+        <input type="datetime-local" id="lost_time" name="lost_time" required value="{{ form_data.lost_time if form_data else '' }}">
+
+        <label for="lost_location_text" class="required">输入丢失地点关键字搜索:</label>
+        <input type="text" id="lost_location_text" name="lost_location_text" required placeholder="例如: 北京市朝阳区xx小区 或 东方明珠" value="{{ form_data.lost_location_text if form_data else '' }}" autocomplete="off">
+        <div id="suggestions-list" style="border: 1px solid #ccc; max-height: 150px; overflow-y: auto; background-color: white; position: absolute; z-index: 1000; width: calc(100% - 32px); display: none;">
+            {# 搜索建议将动态添加到这里 #}
+        </div>
+        <div id="mapContainer" style="width: 100%; height: 300px; margin-top: 10px; border: 1px solid #ccc;"></div> {# 地图将在这里显示 #}
+
+        <p id="selected-coords" style="margin-top: 5px; font-size: 0.9em; color: #555;">当前未选择位置</p>
+        {# --- 隐藏的经纬度字段 --- #}
+        <input type="hidden" id="latitude" name="latitude" value="{{ form_data.latitude if form_data else '' }}">
+        <input type="hidden" id="longitude" name="longitude" value="{{ form_data.longitude if form_data else '' }}">
+        {# -------------------- #}
+
+        <label for="contact_info" class="required" style="margin-top: 5px;">联系方式:</label> 
+        <input type="text" id="contact_info" name="contact_info" required placeholder="例如: 电话 138******** 或微信号" value="{{ form_data.contact_info if form_data else '' }}">
+
+        <label for="photos">宠物照片:</label>
+        <input type="file" id="photos" name="photos" multiple accept="image/*">
+        <div id="image-preview-container" style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 10px;"></div>
+
+        <button type="submit">提交寻宠启事</button>
+    </form>
+
+    <script>
+        const breedsData = {
+            '猫': ['英国短毛猫', '美国短毛猫', '布偶猫', '波斯猫', '暹罗猫', '中华田园猫', '其他品种'],
+            '狗': ['泰迪犬', '金毛寻回犬', '拉布拉多寻回犬', '哈士奇', '柯基犬', '中华田园犬', '其他品种']
+            // Can add more types and breeds here
+        };
+
+        const petTypeSelect = document.getElementById('pet_type');
+        const breedSelect = document.getElementById('breed');
+        const otherBreedDiv = document.getElementById('other_breed_div');
+        const otherBreedInput = document.getElementById('other_breed');
+
+        function populateBreeds(selectedType) {
+            breedSelect.innerHTML = ''; // Clear existing options
+            otherBreedDiv.style.display = 'none'; // Hide other input initially
+            otherBreedInput.required = false;
+            otherBreedInput.value = ''; // Clear other input
+
+            if (selectedType && breedsData[selectedType]) {
+                // Add a default prompt option
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = '-- 请选择品种 --';
+                breedSelect.appendChild(defaultOption);
+
+                // Add breeds from data
+                const breeds = breedsData[selectedType]; 
+                breeds.forEach(breed => {
+                    const option = document.createElement('option');
+                    option.value = breed;
+                    option.textContent = breed;
+                    breedSelect.appendChild(option);
+                });
+            } else {
+                // If no type selected or type not found
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = '-- 请先选择宠物种类 --';
+                breedSelect.appendChild(defaultOption);
+            }
+        }
+
+        function checkOtherBreed(selectedBreed) {
+            if (selectedBreed === '其他品种') {
+                otherBreedDiv.style.display = 'block';
+                otherBreedInput.required = true;
+            } else {
+                otherBreedDiv.style.display = 'none';
+                otherBreedInput.required = false;
+                otherBreedInput.value = ''; // Clear value if user switches away
+            }
+        }
+
+        // Event listener for pet type change
+        petTypeSelect.addEventListener('change', function() {
+            populateBreeds(this.value);
+            // Reset breed selection and other breed input
+            breedSelect.value = ''; 
+            checkOtherBreed(''); 
+        });
+
+        // Event listener for breed change
+        breedSelect.addEventListener('change', function() {
+            checkOtherBreed(this.value);
+        });
+
+        // Initial population and selection on page load (e.g., after validation error)
+        document.addEventListener('DOMContentLoaded', function() {
+            const initialPetType = petTypeSelect.value;
+            const initialBreed = "{{ form_data.breed if form_data else '' }}";
+            const initialOtherBreed = "{{ form_data.other_breed if form_data else '' }}";
+
+            if (initialPetType) {
+                populateBreeds(initialPetType);
+                // Try to re-select the breed
+                if (initialBreed) {
+                    // Check if the initial breed is one of the standard options
+                    let found = false;
+                    for (let i = 0; i < breedSelect.options.length; i++) {
+                        if (breedSelect.options[i].value === initialBreed) {
+                            breedSelect.value = initialBreed;
+                            found = true;
+                            break;
+                        }
+                    }
+                    // If not found in standard options, assume it was 'Other'
+                    if (!found && initialOtherBreed) {
+                         breedSelect.value = '其他品种';
+                         otherBreedInput.value = initialOtherBreed; // Repopulate other breed input
+                    } else if (!found && initialBreed === '其他品种') {
+                         // Handle case where '其他品种' was selected but no text entered (should not happen if validation works)
+                         breedSelect.value = '其他品种'; 
+                    }
+                } 
+            }
+            // Ensure the 'other breed' input visibility is correct based on initial breed selection
+            checkOtherBreed(breedSelect.value);
+             // Ensure the 'other breed' input value is repopulated if necessary
+             if (breedSelect.value === '其他品种' && initialOtherBreed) {
+                 otherBreedInput.value = initialOtherBreed;
+             }
+        });
+
+        // --- 腾讯地图初始化和选点逻辑 (由 API 回调触发) --- 
+        document.addEventListener('DOMContentLoaded', function() {
+            // 检查百度地图 API 是否已加载（BMap 对象是否存在）
+            if (typeof BMap !== 'undefined' && document.getElementById('mapContainer')) {
+                initMap();
+            } else {
+                console.error("百度地图 API 加载失败或地图容器不存在。");
+                // 可以在这里给用户一些提示
+                const mapContainer = document.getElementById('mapContainer');
+                if (mapContainer) {
+                    mapContainer.innerHTML = '<p style="color: red;">地图加载失败，请检查网络或联系管理员。</p>';
+                }
+                const searchInput = document.getElementById('lost_location_text');
+                if (searchInput) {
+                    searchInput.placeholder = "地图加载失败，无法搜索";
+                    searchInput.disabled = true;
+                }
+            }
+        });
+
+        function initMap() {
+            console.log("[DEBUG] initMap function CALLED for Baidu Map...");
+            var mapContainer = document.getElementById('mapContainer');
+
+            // 1. 创建地图实例
+            var map = new BMap.Map(mapContainer);
+            console.log("[DEBUG] BMap instance created.");
+
+            // 2. 设置地图中心点和缩放级别 (默认为北京天安门)
+            var point = new BMap.Point(116.404, 39.915);
+            map.centerAndZoom(point, 12);
+
+            // 3. 开启鼠标滚轮缩放
+            map.enableScrollWheelZoom(true);
+
+            // 4. 添加地图控件：缩放和平移
+            map.addControl(new BMap.NavigationControl());
+            // 添加比例尺控件
+            map.addControl(new BMap.ScaleControl());
+            // 添加地图类型控件 (地图、卫星、三维 - 如果需要)
+            // map.addControl(new BMap.MapTypeControl()); 
+
+            var currentMarker = null; // 用于存储当前的标记
+            var geoc = new BMap.Geocoder(); // 创建地址解析器实例
+
+            // 5. 添加地图点击事件监听器
+            map.addEventListener('click', function(e){
+                console.log('[DEBUG] Map clicked at:', e.point);
+                var lat = e.point.lat.toFixed(6);
+                var lng = e.point.lng.toFixed(6);
+
+                // 更新隐藏的经纬度输入框
+                document.getElementById('latitude').value = lat;
+                document.getElementById('longitude').value = lng;
+                console.log(`[DEBUG] Hidden fields updated: lat=${lat}, lng=${lng}`);
+
+                // 更新显示的当前选择位置
+                var selectedLocationSpan = document.getElementById('selected-coords');
+                selectedLocationSpan.textContent = `坐标: ${lat}, ${lng}`; // 先显示坐标
+                selectedLocationSpan.style.color = 'orange'; // 标记为正在解析
+
+                // 移除旧标记
+                if (currentMarker) {
+                    map.removeOverlay(currentMarker);
+                }
+
+                // 创建新标记并添加到地图上
+                var markerPoint = new BMap.Point(lng, lat); // 注意百度是 lng, lat
+                currentMarker = new BMap.Marker(markerPoint);
+                map.addOverlay(currentMarker);
+                console.log("[DEBUG] Marker added/updated.");
+
+                // 6. 逆地址解析：将坐标转换为地址
+                geoc.getLocation(markerPoint, function(rs){
+                    var addComp = rs.addressComponents;
+                    var address = addComp.province + addComp.city + addComp.district + addComp.street + addComp.streetNumber;
+                    console.log('[DEBUG] Geocoder result:', address);
+                    if (address) {
+                        selectedLocationSpan.textContent = `${address} (坐标: ${lat}, ${lng})`;
+                        selectedLocationSpan.style.color = 'green'; // 标记为有效
+                         // 同时更新关键词输入框
+                        document.getElementById('lost_location_text').value = address;
+                    } else {
+                        selectedLocationSpan.textContent = `坐标: ${lat}, ${lng} (无法获取地址)`;
+                        selectedLocationSpan.style.color = 'red';
+                    }
+                });
+            });
+
+            // 7. 实现地点搜索输入框的自动建议功能
+            var searchInput = document.getElementById('lost_location_text');
+            var suggestionsPanel = document.getElementById('suggestions-list'); // 复用建议面板
+
+            // 创建百度地图的自动完成实例
+            var autocomplete = new BMap.Autocomplete({
+                "input" : searchInput,
+                "location" : map // 限制在当前地图视角附近
+            });
+
+            autocomplete.addEventListener("onhighlight", function(e) { // 鼠标悬停或键盘上下选择时
+                // 可以添加一些高亮样式逻辑，但暂时不处理
+            });
+
+            autocomplete.addEventListener("onconfirm", function(e) { // 确认选择（点击或回车）
+                var _value = e.item.value;
+                var myValue = _value.province +  _value.city +  _value.district +  _value.street +  _value.business;
+                console.log("[DEBUG] Autocomplete confirmed:", myValue);
+                document.getElementById('selected-coords').textContent = "正在定位: " + myValue;
+                document.getElementById('selected-coords').style.color = 'orange';
+
+                // 清除旧标记
+                if (currentMarker) {
+                    map.removeOverlay(currentMarker);
+                }
+
+                // 创建 LocalSearch 实例进行精确定位
+                var localSearch = new BMap.LocalSearch(map, {
+                    onSearchComplete: function(){
+                        var pp = localSearch.getResults().getPoi(0).point; // 获取第一个智能搜索的结果坐标
+                        map.centerAndZoom(pp, 18); // 定位并放大
+                        // 模拟点击地图以更新标记和经纬度
+                        map.dispatchEvent('click', {point: pp}); // 触发我们自己的点击处理逻辑
+                    }
+                });
+                localSearch.search(myValue);
+            });
+
+            // 点击建议面板外部时隐藏建议 (百度Autocomplete会自动处理)
+            // 但如果需要自定义面板，可能需要类似之前的逻辑
+
+            console.log("[DEBUG] initMap function for Baidu Map finished execution.");
+        }
+
+        // --- 图片预览 --- 
+        const photoInput = document.getElementById('photos');
+        const previewContainer = document.getElementById('image-preview-container');
+
+        photoInput.addEventListener('change', function(event) {
+            // 清空之前的预览
+            previewContainer.innerHTML = ''; 
+
+            const files = event.target.files;
+            if (files) {
+                Array.from(files).forEach(file => {
+                    if (file.type.startsWith('image/')) { 
+                        const reader = new FileReader();
+                        
+                        reader.onload = function(e) {
+                            const img = document.createElement('img');
+                            img.src = e.target.result;
+                            img.classList.add('preview-thumbnail');
+                            previewContainer.appendChild(img);
+                        }
+                        
+                        reader.readAsDataURL(file); 
+                    }
+                });
+            }
+        });
+    </script>
+
+</body>
+</html>

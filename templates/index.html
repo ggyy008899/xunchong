@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }} - 宠物寻回平台</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    {# --- 引入腾讯地图 JS API --- #}
+    {% if tencent_map_api_key %}
+    <script charset="utf-8" src="https://map.qq.com/api/js?v=2.exp&key={{ tencent_map_api_key }}"></script>
+    {% endif %}
+    <style>
+        .report-card {
+            border: 1px solid #ccc;
+            border-radius: 5px; 
+            padding: 15px; 
+            margin-bottom: 15px;
+        }
+        .photo-gallery {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .pet-photo-thumbnail {
+            width: 100px;
+            height: 100px;
+            margin: 5px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .found-badge {
+            background-color: #dff0d8;
+            color: #3c763d;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        .found-time {
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>欢迎来到宠物寻回平台</h1>
+
+    {# --- 添加搜索/筛选表单 --- #}
+    <form method="GET" action="{{ url_for('index') }}" class="search-form">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="search_pet_type">宠物类型:</label>
+                <select id="search_pet_type" name="pet_type">
+                    <option value="">全部类型</option>
+                    {# 预定义类型，注意检查 search_params 是否存在 #}
+                    <option value="猫" {% if search_params and search_params.get('pet_type') == '猫' %}selected{% endif %}>猫</option>
+                    <option value="狗" {% if search_params and search_params.get('pet_type') == '狗' %}selected{% endif %}>狗</option>
+                    <option value="其他" {% if search_params and search_params.get('pet_type') == '其他' %}selected{% endif %}>其他</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="search_location">丢失地点 (模糊):</label>
+                <input type="text" id="search_location" name="location" value="{{ search_params.get('location', '') if search_params else '' }}" placeholder="输入地点关键字">
+            </div>
+        </div>
+        <div class="form-row">
+             <div class="form-group">
+                <label for="search_color">颜色 (模糊):</label>
+                <input type="text" id="search_color" name="color" value="{{ search_params.get('color', '') if search_params else '' }}" placeholder="输入颜色关键字">
+            </div>
+            <div class="form-group">
+                <label for="search_status">状态:</label>
+                <select id="search_status" name="status">
+                    <option value="" {% if not search_params or search_params.get('status') == '' %}selected{% endif %}>全部状态</option>
+                    <option value="lost" {% if search_params and search_params.get('status') == 'lost' %}selected{% endif %}>丢失中</option>
+                    <option value="found" {% if search_params and search_params.get('status') == 'found' %}selected{% endif %}>已找到</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <button type="submit" class="search-button">搜索</button>
+            <a href="{{ url_for('index') }}" class="clear-search-button">清空筛选</a> {# 清空筛选按钮 #}
+        </div>
+    </form>
+    {# ----------------------- #}
+
+    {# --- 地图容器 --- #}
+    <h2>启事位置地图概览</h2>
+    {% if tencent_map_api_key %}
+    <div id="map-container" style="width: 100%; height: 450px; border: 1px solid #ccc; margin-bottom: 20px;"></div>
+    {% else %}
+    <p style="color: orange; margin-bottom: 20px;">提示: 未配置腾讯地图 API Key，无法显示地图概览。</p>
+    {% endif %}
+
+    <h2>最近的寻宠启事</h2>
+    <div class="reports-list">
+        {% if reports %}
+            {% for report in reports %}
+                <div class="report-card {% if report.is_found %}is-found{% endif %}" style="border: 1px solid #ccc; border-radius: 5px; padding: 15px; margin-bottom: 15px;"> 
+                    <h3>寻找 {{ report.pet_type }}: {% if report.breed == '其他品种' %}{{ report.other_breed }}{% else %}{{ report.breed }}{% endif %}
+                     {# --- 显示 '已找到' 标签 --- #}
+                     {% if report.is_found %}
+                         <span class="found-badge">已找到</span>
+                         {% if report.found_time %}
+                            <span class="found-time">(标记于: {{ report.found_time.strftime('%Y-%m-%d %H:%M') }})</span>
+                         {% endif %}
+                     {% endif %}
+                    </h3>
+
+                    {# Display all uploaded photos #}
+                    {% if report.photo_urls %}
+                      <div class="photo-gallery">
+                        {% for photo_url in report.photo_urls %}
+                          <a href="{{ photo_url }}" target="_blank" rel="noopener noreferrer">
+                            <img src="{{ photo_url }}" alt="宠物照片 {{ loop.index }}" class="pet-photo-thumbnail">
+                          </a>
+                        {% endfor %}
+                      </div>
+                    {% else %}
+                      <p>(无照片)</p>
+                    {% endif %}
+                    <p><strong>颜色:</strong> {{ report.color }}</p>
+                    <p><strong>丢失地点:</strong> {{ report.lost_location_text }}</p>
+                    <p><strong>丢失时间:</strong> {{ report.lost_time.strftime('%Y-%m-%d %H:%M') if report.lost_time else '未知' }}</p>
+                    <p><strong>描述:</strong> {{ report.features }}</p>
+                    <p><strong>联系方式:</strong> {{ report.contact_info }}</p>
+
+                    {# --- 显示操作按钮 --- #}
+                    {% if not report.is_found %}
+                        <form action="{{ url_for('mark_as_found', report_id=report.id) }}" method="POST" style="margin-top: 10px; display: inline-block;"> {# 改为 inline-block #}
+                            <button type="submit" class="mark-found-button">标记为已找到</button>
+                        </form>
+                    {% endif %}
+                    {# ------------------ #}
+                     <p style="font-size: 0.8em; color: #666; margin-top: 10px;">发布于: {{ report.created_at.strftime('%Y-%m-%d %H:%M') }}</p> {# 加点上边距 #}
+                </div>
+            {% endfor %}
+        {% else %}
+            <p>目前还没有寻宠启事。</p>
+            <p>或者没有符合您筛选条件的启事。</p> {# 搜索无结果时的提示 #}
+        {% endif %}
+    </div>
+
+    <script>
+        // --- 地图标记数据准备 (Jinja2 生成 JS 数组) --- 
+        const markersData = [];
+        {% for report in reports %}
+            {% if report.latitude is not none and report.longitude is not none %}
+                markersData.push({
+                    lat: {{ report.latitude }},
+                    lng: {{ report.longitude }},
+                    title: "{{ report.pet_type }} ({{ report.breed if report.breed else '未知品种' }})",
+                    description: "{{ report.lost_location_text | replace('\n', ' ') | replace('\r', '') | escape }}", // 简单处理换行并转义
+                    id: {{ report.id }}
+                });
+            {% endif %}
+        {% endfor %}
+
+        // --- 腾讯地图初始化和标记添加 --- 
+        {% if tencent_map_api_key %}
+        document.addEventListener('DOMContentLoaded', function() {
+            const mapContainer = document.getElementById('map-container');
+            if (!mapContainer) return; // 如果容器不存在则退出
+
+            let map;
+            let infoWindow = null; // 单例信息窗口
+            const bounds = new qq.maps.LatLngBounds(); // 用于自适应视野
+
+            // 默认中心点（中国大概中心）和缩放级别
+            const defaultCenter = new qq.maps.LatLng(34.0, 104.0);
+            const defaultZoom = 5;
+
+            // 初始化地图
+            map = new qq.maps.Map(mapContainer, {
+                center: defaultCenter,
+                zoom: defaultZoom
+            });
+
+            // 创建信息窗口实例
+            infoWindow = new qq.maps.InfoWindow({
+                map: map
+            });
+
+            // 添加标记
+            if (markersData.length > 0) {
+                markersData.forEach(data => {
+                    const position = new qq.maps.LatLng(data.lat, data.lng);
+                    const marker = new qq.maps.Marker({
+                        position: position,
+                        map: map,
+                        title: data.title // 鼠标悬停提示
+                    });
+
+                    // 扩展边界以包含此标记
+                    bounds.extend(position);
+
+                    // 为标记添加点击事件
+                    qq.maps.event.addListener(marker, 'click', function() {
+                        // 设置信息窗口内容并打开
+                        // 点击标记跳转到详情页 (如果 report_detail 页面存在)
+                        // 或者显示基本信息
+                         const content = `<strong>${data.title}</strong><br>${data.description}<br><a href="/report/${data.id}" target="_blank">查看详情</a>`;
+                        infoWindow.setContent(content);
+                        infoWindow.setPosition(position);
+                        infoWindow.open();
+                    });
+                });
+
+                // 调整地图视野以适应所有标记
+                map.fitBounds(bounds);
+                // 防止过度缩放
+                 if (map.getZoom() > 16) {
+                      map.setZoom(16);
+                  }
+            } else {
+                // 如果没有标记数据，保持默认视野
+                 map.setCenter(defaultCenter);
+                 map.setZoom(defaultZoom);
+                 // 可以在地图中心显示提示
+                 // infoWindow.setContent('当前筛选条件下没有包含位置信息的启事');
+                 // infoWindow.setPosition(defaultCenter);
+                 // infoWindow.open(); 
+            }
+            
+             // 点击地图空白处关闭信息窗口
+             qq.maps.event.addListener(map, 'click', function() {
+                 if (infoWindow) {
+                     infoWindow.close();
+                 }
+             });
+        });
+        {% endif %}
+    </script>
+
+    {# --- 显示 Flash 消息 --- #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flashes">
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category or 'info' }}">{{ message }}</div>
+            {% endfor %}
+            </div>
+            <style>
+                .alert {
+                    padding: 15px;
+                    margin-bottom: 20px;
+                    border: 1px solid transparent;
+                    border-radius: 4px;
+                }
+                .alert-success {
+                    color: #155724;
+                    background-color: #d4edda;
+                    border-color: #c3e6cb;
+                }
+                .alert-error {
+                    color: #721c24;
+                    background-color: #f8d7da;
+                    border-color: #f5c6cb;
+                }
+                .alert-info {
+                    color: #0c5460;
+                    background-color: #d1ecf1;
+                    border-color: #bee5eb;
+                }
+            </style>
+        {% endif %}
+    {% endwith %}
+    {# ----------------------- #}
+
+    <!-- Example links (will be replaced by actual UI) -->
+    <div style="margin-top: 30px;">
+        <a href="{{ url_for('report_lost') }}" class="button">发布寻宠启事</a>
+        {# Add link to search page later #}
+    </div>
+
+</body>
+</html>
