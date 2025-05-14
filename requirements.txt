@@ -4,3 +4,4 @@ Flask-Migrate>=3.0
 python-dotenv>=0.19
 requests>=2.25 # For calling WeChat API later
 gunicorn
+Pillow

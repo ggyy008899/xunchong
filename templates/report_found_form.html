@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>发布招领启事</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        label {
+            display: block;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        input[type=text],
+        input[type=datetime-local],
+        textarea,
+        select {
+            width: 95%; /* Adjusted for padding */
+            padding: 8px;
+            margin-top: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box; /* Include padding in width */
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .required::after {
+            content: " *";
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <h1>发布招领启事</h1>
+
+    {# --- Display Flashed Messages --- #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <ul class=flashes>
+        {% for category, message in messages %}
+          <li class="{{ category }}">{{ message }}</li>
+        {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+    {# ----------------------------- #}
+
+    <form action="{{ url_for('report_found') }}" method="post" enctype="multipart/form-data">
+        <label for="pet_type" class="required">宠物种类:</label>
+        <select id="pet_type" name="pet_type" required>
+            <option value="" {% if not form_data or form_data.pet_type == '' %}selected{% endif %}>请选择</option>
+            <option value="猫" {% if form_data and form_data.pet_type == '猫' %}selected{% endif %}>猫</option>
+            <option value="狗" {% if form_data and form_data.pet_type == '狗' %}selected{% endif %}>狗</option>
+        </select>
+
+        <label for="breed">宠物品种:</label> {# Breed is optional for found pets #}
+        <select id="breed" name="breed" onchange="checkOtherBreed(this.value)">
+            <option value="">-- 请先选择宠物种类 --</option>
+            {# JS will populate this based on pet_type #}
+        </select>
+
+        <div id="other_breed_div" style="display: none; margin-top: 5px;">
+            <label for="other_breed" class="required">请填写具体品种:</label> {# Required only if '其他品种' is selected #}
+            <input type="text" id="other_breed" name="other_breed" value="{{ form_data.other_breed if form_data else '' }}">
+        </div>
+
+        <label for="color" class="required">宠物颜色:</label>
+        <input type="text" id="color" name="color" required value="{{ form_data.color if form_data else '' }}">
+
+        <label for="gender" class="required">性别:</label>
+        <select id="gender" name="gender" required>
+            <option value="" {% if not form_data or form_data.gender == '' %}selected{% endif %}>请选择</option>
+            <option value="雄性" {% if form_data and form_data.gender == '雄性' %}selected{% endif %}>雄性</option>
+            <option value="雌性" {% if form_data and form_data.gender == '雌性' %}selected{% endif %}>雌性</option>
+            <option value="未知" {% if form_data and form_data.gender == '未知' %}selected{% endif %}>未知</option> {# Consider if '未知' is appropriate if model requires a value #}
+        </select>
+
+        <label for="features" class="required">明显特征描述:</label>
+        <textarea id="features" name="features" required>{{ form_data.features if form_data else '' }}</textarea>
+
+        <label for="found_time" class="required">拾获时间:</label>
+        <input type="datetime-local" id="found_time" name="found_time" required value="{{ form_data.found_time if form_data else '' }}">
+
+        <label for="found_location_text" class="required">拾获地点文字描述:</label>
+        <input type="text" id="found_location_text" name="found_location_text" required placeholder="例如: 北京市朝阳区xx小区附近" value="{{ form_data.found_location_text if form_data else '' }}">
+
+        <label for="contact_info" class="required">联系方式:</label>
+        <input type="text" id="contact_info" name="contact_info" required placeholder="例如: 电话 138******** 或微信号" value="{{ form_data.contact_info if form_data else '' }}">
+
+        <label for="photos">宠物照片:</label>
+        <input type="file" id="photos" name="photos" multiple accept="image/*">
+        <div id="image-preview-container" style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 10px;"></div>
+
+        <button type="submit">提交招领启事</button>
+    </form>
+
+    <script>
+        const breedsData = {
+            '猫': ['英国短毛猫', '美国短毛猫', '布偶猫', '波斯猫', '暹罗猫', '中华田园猫', '其他品种'],
+            '狗': ['泰迪犬', '金毛寻回犬', '拉布拉多寻回犬', '哈士奇', '柯基犬', '中华田园犬', '其他品种']
+        };
+
+        const petTypeSelect = document.getElementById('pet_type');
+        const breedSelect = document.getElementById('breed');
+        const otherBreedDiv = document.getElementById('other_breed_div');
+        const otherBreedInput = document.getElementById('other_breed');
+
+        function populateBreeds(selectedType) {
+            breedSelect.innerHTML = '';
+            otherBreedDiv.style.display = 'none';
+            otherBreedInput.required = false;
+            otherBreedInput.value = '';
+
+            if (selectedType && breedsData[selectedType]) {
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = '-- 请选择品种 --';
+                breedSelect.appendChild(defaultOption);
+
+                const breeds = breedsData[selectedType];
+                breeds.forEach(breed => {
+                    const option = document.createElement('option');
+                    option.value = breed;
+                    option.textContent = breed;
+                    breedSelect.appendChild(option);
+                });
+            } else {
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = '-- 请先选择宠物种类 --';
+                breedSelect.appendChild(defaultOption);
+            }
+        }
+
+        function checkOtherBreed(selectedBreed) {
+            if (selectedBreed === '其他品种') {
+                otherBreedDiv.style.display = 'block';
+                otherBreedInput.required = true;
+            } else {
+                otherBreedDiv.style.display = 'none';
+                otherBreedInput.required = false;
+                otherBreedInput.value = '';
+            }
+        }
+
+        petTypeSelect.addEventListener('change', function() {
+            populateBreeds(this.value);
+            breedSelect.value = '';
+            checkOtherBreed('');
+        });
+
+        breedSelect.addEventListener('change', function() {
+            checkOtherBreed(this.value);
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const initialPetType = petTypeSelect.value;
+            const initialBreed = "{{ form_data.breed if form_data else '' }}";
+            const initialOtherBreed = "{{ form_data.other_breed if form_data else '' }}";
+
+            if (initialPetType) {
+                populateBreeds(initialPetType);
+                if (initialBreed) {
+                    breedSelect.value = initialBreed;
+                    checkOtherBreed(initialBreed);
+                    if (initialBreed === '其他品种' && initialOtherBreed) {
+                        otherBreedInput.value = initialOtherBreed;
+                    }
+                }
+            } else {
+                 populateBreeds(''); // Ensure breed dropdown is in a sensible default state
+            }
+            
+            // Image preview logic
+            const photosInput = document.getElementById('photos');
+            const imagePreviewContainer = document.getElementById('image-preview-container');
+
+            photosInput.addEventListener('change', function(event) {
+                imagePreviewContainer.innerHTML = ''; // Clear previous previews
+                const files = event.target.files;
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    if (file.type.startsWith('image/')) {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            const img = document.createElement('img');
+                            img.src = e.target.result;
+                            img.style.maxWidth = '100px';
+                            img.style.maxHeight = '100px';
+                            img.style.objectFit = 'cover';
+                            img.style.borderRadius = '4px';
+                            imagePreviewContainer.appendChild(img);
+                        }
+                        reader.readAsDataURL(file);
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
