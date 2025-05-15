@@ -378,7 +378,10 @@ def create_app(config_class=Config):
     # Create database tables if they don't exist
     # Use Flask-Migrate for better database schema management in real projects
     # with app.app_context():
-    #     db.create_all()
+    with app.app_context():
+        current_app.logger.info("Ensuring database tables are created via db.create_all()...")
+        db.create_all()
+        current_app.logger.info("Finished db.create_all(). Tables should now exist if models are defined.")
 
     return app
 
