@@ -13,6 +13,21 @@ import xml.etree.ElementTree as ET # For parsing WeChat XML
 
 def create_app(config_class=Config):
     app = Flask(__name__)
+
+    # --- 设置日志级别，尝试与Gunicorn集成 ---
+    # 在生产环境中 (非debug模式)，Flask的默认日志级别可能是WARNING
+    # 我们希望INFO级别的日志也能被Gunicorn捕获
+    if not app.debug:
+        import logging # 确保导入
+        gunicorn_error_logger = logging.getLogger('gunicorn.error')
+        app.logger.handlers = gunicorn_error_logger.handlers
+        app.logger.setLevel(gunicorn_error_logger.level if gunicorn_error_logger.level != 0 else logging.INFO) # 如果gunicorn级别未设置(0)，则默认为INFO
+        # 为确保我们自己的INFO日志能输出，如果Gunicorn的级别高于INFO，我们可能还是需要强制INFO
+        if app.logger.level > logging.INFO:
+            app.logger.setLevel(logging.INFO)
+        app.logger.info("Flask logger configured to integrate with Gunicorn's error logger.") # 加一条日志确认配置
+    # -------------------------------------
+
     app.config.from_object(config_class)
 
     # --- 添加日志：检查配置加载后的 API Key --- 
