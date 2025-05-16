@@ -78,6 +78,19 @@ def create_app(config_class=Config):
             found_query = found_query.filter(PetFoundReport.color.ilike(f'%{color}%'))
         found_reports = found_query.order_by(PetFoundReport.created_at.desc()).all()
         
+        # --- 新增的日志代码 开始 ---
+        current_app.logger.info(f"[index route] Attempting to display lost reports.")
+        current_app.logger.info(f"[index route] Number of lost_reports fetched: {len(lost_reports)}")
+        if lost_reports:
+            current_app.logger.info(f"[index route] Details of first lost_report: ID={lost_reports[0].id}, Type={lost_reports[0].pet_type}, Breed={lost_reports[0].breed}, Location={lost_reports[0].lost_location_text}")
+            # 打印更多报告信息，如果需要
+            # for i, report in enumerate(lost_reports[:3]): # 打印前3条
+            #     current_app.logger.info(f"[index route] Report {i+1}: ID={report.id}, Type={report.pet_type}")
+        else:
+            current_app.logger.info(f"[index route] lost_reports list is empty before rendering template.")
+        current_app.logger.info(f"[index route] Number of found_reports fetched: {len(found_reports)}") # 也打印一下found_reports的数量
+        # --- 新增的日志代码 结束 ---
+
         # --- 获取地图 API Key --- 
         tencent_map_api_key = current_app.config.get('TENCENT_MAP_API_KEY')
 
