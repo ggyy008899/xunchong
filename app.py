@@ -52,33 +52,56 @@ def create_app(config_class=Config):
     # A simple route for the homepage (will be an H5 page)
     @app.route('/')
     def index():
+        # --- 获取 report_type 参数，用于区分显示寻宠还是招领 --- 
+        report_type_filter = request.args.get('report_type', 'all') # 'lost', 'found', or 'all'
+
         # --- 获取搜索参数 --- 
         search_params = request.args.to_dict()
+        # 如果 report_type_filter 不是 'all'，它应该优先于 search_params 中的 report_type
+        # 但我们这里的设计是 report_type_filter 控制查询范围，search_params 用于进一步筛选
         pet_type = search_params.get('pet_type')
-        location_query = search_params.get('location') # Renamed to avoid conflict if 'location' is used as a var name
+        location_query = search_params.get('location')
         color = search_params.get('color')
-        # 'status' query param will be primarily used by the template to switch views
+        status_filter = search_params.get('status') # For lost_reports: '', 'lost', 'found'
 
-        # --- Query for Lost Pet Reports (active ones) ---
-        lost_query = PetLostReport.query.filter(PetLostReport.is_found == False)
-        if pet_type:
-            lost_query = lost_query.filter(PetLostReport.pet_type == pet_type)
-        if location_query:
-            lost_query = lost_query.filter(PetLostReport.lost_location_text.ilike(f'%{location_query}%'))
-        if color:
-            lost_query = lost_query.filter(PetLostReport.color.ilike(f'%{color}%'))
-        lost_reports = lost_query.order_by(PetLostReport.created_at.desc()).all()
+        lost_reports = []
+        found_reports = []
 
-        # --- Query for Found Pet Reports ---
-        found_query = PetFoundReport.query
-        if pet_type:
-            found_query = found_query.filter(PetFoundReport.pet_type == pet_type)
-        if location_query: # Apply location search to found_location_text
-            found_query = found_query.filter(PetFoundReport.found_location_text.ilike(f'%{location_query}%'))
-        if color:
-            found_query = found_query.filter(PetFoundReport.color.ilike(f'%{color}%'))
-        found_reports = found_query.order_by(PetFoundReport.created_at.desc()).all()
+        # --- 根据 report_type_filter 条件化查询 ---
+        if report_type_filter == 'lost' or report_type_filter == 'all':
+            lost_query = PetLostReport.query
+            # Apply status filter for lost reports
+            if status_filter == 'lost': # Explicitly searching for 'lost' (is_found == False)
+                lost_query = lost_query.filter(PetLostReport.is_found == False)
+            elif status_filter == 'found': # Explicitly searching for 'found' (is_found == True)
+                lost_query = lost_query.filter(PetLostReport.is_found == True)
+            # If status_filter is empty or not 'lost'/'found', no status filter is applied by default
+            # unless the base query for 'lost' type implies active ones (e.g. is_found == False)
+            # For 'report_type_filter == lost', we usually want active ones by default, unless 'status' says otherwise
+            if report_type_filter == 'lost' and not status_filter: # Default to active if viewing only lost reports and no status specified
+                 lost_query = lost_query.filter(PetLostReport.is_found == False)
+            
+            if pet_type:
+                lost_query = lost_query.filter(PetLostReport.pet_type == pet_type)
+            if location_query:
+                lost_query = lost_query.filter(PetLostReport.lost_location_text.ilike(f'%{location_query}%'))
+            if color:
+                lost_query = lost_query.filter(PetLostReport.color.ilike(f'%{color}%'))
+            lost_reports = lost_query.order_by(PetLostReport.created_at.desc()).all()
+
+        if report_type_filter == 'found' or report_type_filter == 'all':
+            found_query = PetFoundReport.query
+            if pet_type:
+                found_query = found_query.filter(PetFoundReport.pet_type == pet_type)
+            if location_query:
+                found_query = found_query.filter(PetFoundReport.found_location_text.ilike(f'%{location_query}%'))
+            if color:
+                found_query = found_query.filter(PetFoundReport.color.ilike(f'%{color}%'))
+            # 'status' filter typically doesn't apply to found_reports in the same way
+            found_reports = found_query.order_by(PetFoundReport.created_at.desc()).all()
         
+        # current_app.logger.info(f"Report type: {report_type_filter}, Lost: {len(lost_reports)}, Found: {len(found_reports)}")
+
         # --- 新增的日志代码 开始 ---
         current_app.logger.info(f"[index route] Attempting to display lost reports.")
         current_app.logger.info(f"[index route] Number of lost_reports fetched: {len(lost_reports)}")
@@ -92,6 +115,7 @@ def create_app(config_class=Config):
         current_app.logger.info(f"[index route] Number of found_reports fetched: {len(found_reports)}") # 也打印一下found_reports的数量
         # --- 新增的日志代码 结束 ---
 
+        # --- 渲染模板，传递结果、搜索参数和 report_type --- 
         # --- 获取地图 API Key --- 
         # tencent_map_api_key = current_app.config.get('TENCENT_MAP_API_KEY') # Removed as per user request
 

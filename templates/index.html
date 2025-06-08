@@ -12,10 +12,21 @@
     </style>
 </head>
 <body>
-    <h1>欢迎来到宠物寻回平台</h1>
+    <h1>
+        {% if report_type == 'lost' %}
+            寻找宠物 - 启事大厅
+        {% elif report_type == 'found' %}
+            寻找主人 - 启事大厅
+        {% else %}
+            宠物寻回 - 启事大厅 {# Default or 'all' #}
+        {% endif %}
+    </h1>
 
     {# --- 添加搜索/筛选表单 --- #}
     <form method="GET" action="{{ url_for('index') }}" class="search-form">
+        {% if report_type and report_type != 'all' %}
+            <input type="hidden" name="report_type" value="{{ report_type }}">
+        {% endif %}
         <div class="form-row">
             <div class="form-group">
                 <label for="search_pet_type">宠物类型:</label>
@@ -55,53 +66,90 @@
 
     {# Tencent Map container and related heading removed as per user request #}
 
-    <h2>最近的寻宠启事</h2>
-    <div class="reports-list">
-        {% if lost_reports %}
-            {% for report in lost_reports %}
-                <div class="report-card lost-report {% if report.is_found %}is-found{% endif %}"> 
-                    <h3>寻找 {{ report.pet_type }}: {% if report.breed == '其他品种' %}{{ report.other_breed }}{% else %}{{ report.breed }}{% endif %}
-                     {# --- 显示 '已找到' 标签 --- #}
-                     {% if report.is_found %}
-                         <span class="found-badge">已找到</span>
-                         {% if report.found_time %}
-                            <span class="found-time">(标记于: {{ report.found_time.strftime('%Y-%m-%d %H:%M') }})</span>
+    {% if report_type == 'lost' or report_type == 'all' %}
+        <h2>
+            {% if report_type == 'lost' %}寻找宠物启事{% else %}最近的寻宠启事{% endif %}
+        </h2>
+        <div class="reports-list lost-reports-section">
+            {% if lost_reports %}
+                {% for report in lost_reports %}
+                    <div class="report-card lost-report {% if report.is_found %}is-found{% endif %}"> 
+                        <h3>寻找 {{ report.pet_type }}: {% if report.breed == '其他品种' %}{{ report.other_breed }}{% else %}{{ report.breed }}{% endif %}
+                         {# --- 显示 '已找到' 标签 --- #}
+                         {% if report.is_found %}
+                             <span class="found-badge">已找到</span>
+                             {% if report.found_time %}
+                                <span class="found-time">(标记于: {{ report.found_time.strftime('%Y-%m-%d %H:%M') }})</span>
+                             {% endif %}
                          {% endif %}
-                     {% endif %}
-                    </h3>
+                        </h3>
+                        {% if report.photo_urls %}
+                          <div class="photo-gallery">
+                            {% for photo_url in report.photo_urls %}
+                              <a href="{{ photo_url }}" target="_blank" rel="noopener noreferrer">
+                                <img src="{{ photo_url }}" alt="宠物照片 {{ loop.index }}" class="pet-photo-thumbnail">
+                              </a>
+                            {% endfor %}
+                          </div>
+                        {% else %}
+                          <p>(无照片)</p>
+                        {% endif %}
+                        <p><strong>颜色:</strong> {{ report.color }}</p>
+                        <p><strong>丢失地点:</strong> {{ report.lost_location_text }}</p>
+                        <p><strong>丢失时间:</strong> {{ report.lost_time.strftime('%Y-%m-%d %H:%M') if report.lost_time else '未知' }}</p>
+                        <p><strong>描述:</strong> {{ report.features }}</p>
+                        <p><strong>联系方式:</strong> {{ report.contact_info }}</p>
+                        {% if not report.is_found %}
+                            <form action="{{ url_for('mark_as_found', report_id=report.id) }}" method="POST" style="margin-top: 10px; display: inline-block;">
+                                <button type="submit" class="mark-found-button">标记为已找到</button>
+                            </form>
+                        {% endif %}
+                         <p class="report-meta">发布于: {{ report.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p class="no-reports-message">
+                    {% if report_type == 'lost' %}目前还没有“寻找宠物”的启事，或没有符合您筛选条件的启事。{% else %}目前还没有寻宠启事。{% endif %}
+                </p>
+            {% endif %}
+        </div>
+    {% endif %}
 
-                    {# Display all uploaded photos #}
-                    {% if report.photo_urls %}
-                      <div class="photo-gallery">
-                        {% for photo_url in report.photo_urls %}
-                          <a href="{{ photo_url }}" target="_blank" rel="noopener noreferrer">
-                            <img src="{{ photo_url }}" alt="宠物照片 {{ loop.index }}" class="pet-photo-thumbnail">
-                          </a>
-                        {% endfor %}
-                      </div>
-                    {% else %}
-                      <p>(无照片)</p>
-                    {% endif %}
-                    <p><strong>颜色:</strong> {{ report.color }}</p>
-                    <p><strong>丢失地点:</strong> {{ report.lost_location_text }}</p>
-                    <p><strong>丢失时间:</strong> {{ report.lost_time.strftime('%Y-%m-%d %H:%M') if report.lost_time else '未知' }}</p>
-                    <p><strong>描述:</strong> {{ report.features }}</p>
-                    <p><strong>联系方式:</strong> {{ report.contact_info }}</p>
-
-                    {# --- 显示操作按钮 --- #}
-                    {% if not report.is_found %}
-                        <form action="{{ url_for('mark_as_found', report_id=report.id) }}" method="POST" style="margin-top: 10px; display: inline-block;"> {# 改为 inline-block #}
-                            <button type="submit" class="mark-found-button">标记为已找到</button>
-                        </form>
-                    {% endif %}
-                    {# ------------------ #}
-                     <p class="report-meta">发布于: {{ report.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
-                </div>
-            {% endfor %}
-        {% else %}
-            <p class="no-reports-message">目前还没有寻宠启事，或没有符合您筛选条件的启事。</p>
-        {% endif %}
-    </div>
+    {% if report_type == 'found' or report_type == 'all' %}
+        <h2>
+            {% if report_type == 'found' %}寻找主人启事{% else %}最近的招领启事{% endif %}
+        </h2>
+        <div class="reports-list found-reports-section">
+            {% if found_reports %}
+                {% for report in found_reports %}
+                    <div class="report-card found-report">
+                        <h3>招领 {{ report.pet_type }}: {% if report.breed == '其他品种' %}{{ report.other_breed }}{% else %}{{ report.breed }}{% endif %}</h3>
+                        {% if report.photo_urls %}
+                          <div class="photo-gallery">
+                            {% for photo_url in report.photo_urls %}
+                              <a href="{{ photo_url }}" target="_blank" rel="noopener noreferrer">
+                                <img src="{{ photo_url }}" alt="宠物照片 {{ loop.index }}" class="pet-photo-thumbnail">
+                              </a>
+                            {% endfor %}
+                          </div>
+                        {% else %}
+                          <p>(无照片)</p>
+                        {% endif %}
+                        <p><strong>颜色:</strong> {{ report.color }}</p>
+                        <p><strong>拾获地点:</strong> {{ report.found_location_text }}</p>
+                        <p><strong>拾获时间:</strong> {{ report.found_time.strftime('%Y-%m-%d %H:%M') if report.found_time else '未知' }}</p>
+                        <p><strong>特征描述:</strong> {{ report.features }}</p>
+                        <p><strong>联系方式:</strong> {{ report.contact_info }}</p>
+                        <p class="report-meta">发布于: {{ report.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p class="no-reports-message">
+                    {% if report_type == 'found' %}目前还没有“寻找主人”的启事，或没有符合您筛选条件的启事。{% else %}目前还没有招领启事。{% endif %}
+                </p>
+            {% endif %}
+        </div>
+    {% endif %}
 
     {# --- 显示 Flash 消息 --- #}
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -139,9 +187,9 @@
     {# ----------------------- #}
 
     <!-- Example links (will be replaced by actual UI) -->
-    <div style="margin-top: 30px;">
+    <div style="margin-top: 30px; text-align: center;">
         <a href="{{ url_for('report_lost') }}" class="button">发布寻宠启事</a>
-        {# Add link to search page later #}
+        <a href="{{ url_for('report_found') }}" class="button">发布招领启事</a>
     </div>
 
 </body>
