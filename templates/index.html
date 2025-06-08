@@ -5,10 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title }} - 宠物寻回平台</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    {# --- 引入腾讯地图 JS API --- #}
-    {% if tencent_map_api_key %}
-    <script charset="utf-8" src="https://map.qq.com/api/js?v=2.exp&key={{ tencent_map_api_key }}"></script>
-    {% endif %}
+    {# Tencent Map API script removed as per user request #}
     <style>
         /* General page specific styles can remain here if any */
         /* Report card related styles have been moved to style.css */
@@ -56,13 +53,7 @@
     </form>
     {# ----------------------- #}
 
-    {# --- 地图容器 --- #}
-    <h2>启事位置地图概览</h2>
-    {% if tencent_map_api_key %}
-    <div id="map-container" style="width: 100%; height: 450px; border: 1px solid #ccc; margin-bottom: 20px;"></div>
-    {% else %}
-    <p style="color: orange; margin-bottom: 20px;">提示: 未配置腾讯地图 API Key，无法显示地图概览。</p>
-    {% endif %}
+    {# Tencent Map container and related heading removed as per user request #}
 
     <h2>最近的寻宠启事</h2>
     <div class="reports-list">
@@ -111,97 +102,6 @@
             <p class="no-reports-message">目前还没有寻宠启事，或没有符合您筛选条件的启事。</p>
         {% endif %}
     </div>
-
-    <script>
-        // --- 地图标记数据准备 (Jinja2 生成 JS 数组) --- 
-        const markersData = [];
-        {% for report in lost_reports %}
-            {% if report.latitude is not none and report.longitude is not none %}
-                markersData.push({
-                    lat: {{ report.latitude | tojson }},
-                    lng: {{ report.longitude | tojson }},
-                    title: {{ (report.pet_type ~ " - " ~ (report.other_breed if report.breed == '其他品种' else report.breed)) | tojson }},
-                    description: {{ ("丢失地点: " ~ report.lost_location_text) | tojson }},
-                    id: {{ report.id | tojson }}
-                });
-            {% endif %}
-        {% endfor %}
-
-        // --- 腾讯地图初始化和标记添加 --- 
-        {% if tencent_map_api_key %}
-        document.addEventListener('DOMContentLoaded', function() {
-            const mapContainer = document.getElementById('map-container');
-            if (!mapContainer) return; // 如果容器不存在则退出
-
-            let map;
-            let infoWindow = null; // 单例信息窗口
-            const bounds = new qq.maps.LatLngBounds(); // 用于自适应视野
-
-            // 默认中心点（中国大概中心）和缩放级别
-            const defaultCenter = new qq.maps.LatLng(34.0, 104.0);
-            const defaultZoom = 5;
-
-            // 初始化地图
-            map = new qq.maps.Map(mapContainer, {
-                center: defaultCenter,
-                zoom: defaultZoom
-            });
-
-            // 创建信息窗口实例
-            infoWindow = new qq.maps.InfoWindow({
-                map: map
-            });
-
-            // 添加标记
-            if (markersData.length > 0) {
-                markersData.forEach(data => {
-                    const position = new qq.maps.LatLng(data.lat, data.lng);
-                    const marker = new qq.maps.Marker({
-                        position: position,
-                        map: map,
-                        title: data.title // 鼠标悬停提示
-                    });
-
-                    // 扩展边界以包含此标记
-                    bounds.extend(position);
-
-                    // 为标记添加点击事件
-                    qq.maps.event.addListener(marker, 'click', function() {
-                        // 设置信息窗口内容并打开
-                        // 点击标记跳转到详情页 (如果 report_detail 页面存在)
-                        // 或者显示基本信息
-                         const content = `<strong>${data.title}</strong><br>${data.description}<br><a href="/report/${data.id}" target="_blank">查看详情</a>`;
-                        infoWindow.setContent(content);
-                        infoWindow.setPosition(position);
-                        infoWindow.open();
-                    });
-                });
-
-                // 调整地图视野以适应所有标记
-                map.fitBounds(bounds);
-                // 防止过度缩放
-                 if (map.getZoom() > 16) {
-                      map.setZoom(16);
-                  }
-            } else {
-                // 如果没有标记数据，保持默认视野
-                 map.setCenter(defaultCenter);
-                 map.setZoom(defaultZoom);
-                 // 可以在地图中心显示提示
-                 // infoWindow.setContent('当前筛选条件下没有包含位置信息的启事');
-                 // infoWindow.setPosition(defaultCenter);
-                 // infoWindow.open(); 
-            }
-            
-             // 点击地图空白处关闭信息窗口
-             qq.maps.event.addListener(map, 'click', function() {
-                 if (infoWindow) {
-                     infoWindow.close();
-                 }
-             });
-        });
-        {% endif %}
-    </script>
 
     {# --- 显示 Flash 消息 --- #}
     {% with messages = get_flashed_messages(with_categories=true) %}

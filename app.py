@@ -93,15 +93,14 @@ def create_app(config_class=Config):
         # --- 新增的日志代码 结束 ---
 
         # --- 获取地图 API Key --- 
-        tencent_map_api_key = current_app.config.get('TENCENT_MAP_API_KEY')
+        # tencent_map_api_key = current_app.config.get('TENCENT_MAP_API_KEY') # Removed as per user request
 
         # --- 渲染模板，传递结果、搜索参数和 API Key --- 
         return render_template('index.html', 
                                title='首页 - 寻宠与招领',
                                lost_reports=lost_reports, 
                                found_reports=found_reports, 
-                               search_params=search_params, 
-                               tencent_map_api_key=tencent_map_api_key)
+                               search_params=search_params)
 
     # Placeholder for WeChat verification endpoint
     @app.route('/wechat', methods=['GET', 'POST'])
