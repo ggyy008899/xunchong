@@ -126,6 +126,43 @@
         <button type="submit">提交寻宠启事</button>
     </form>
 
+    <!-- Section for Recent Found Reports -->
+    <div class="recent-reports-container">
+        <h2>您的宠物可能已被好心人找到？</h2>
+        <p>看看最近的招领信息，也许就有好消息：</p>
+
+        {% if recent_found_reports and recent_found_reports|length > 0 %}
+            <div class="reports-list reports-list-condensed"> <!-- Added reports-list-condensed for potentially smaller cards here -->
+                {% for report_item in recent_found_reports %}
+                    <div class="report-card found-report"> <!-- Added found-report class for specific styling -->
+                        <h3>招领启事：捡到 {{ report_item.pet_type }}</h3>
+                        
+                        {% if report_item.photo_urls and report_item.photo_urls|length > 0 %}
+                            <div class="photo-gallery">
+                                {% for photo_filename in report_item.photo_urls %}
+                                     <img src="{{ url_for('static', filename='uploads/' + photo_filename) }}" alt="宠物照片" class="pet-photo-thumbnail">
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p><em>(无照片)</em></p>
+                        {% endif %}
+
+                        <p><strong>颜色:</strong> {{ report_item.color }}</p>
+                        <p><strong>性别:</strong> {{ report_item.gender }}</p>
+                        <p><strong>明显特征:</strong> {{ report_item.features | truncate(80) }}</p>
+                        <p><strong>拾获地点:</strong> {{ report_item.found_location_text | truncate(80) }}</p>
+                        <p><strong>拾获时间:</strong> {{ report_item.found_time.strftime('%Y-%m-%d %H:%M') if report_item.found_time else '未知' }}</p>
+                        <p class="report-meta">发布于: {{ report_item.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                        {# <a href="#" class="button-link">查看详情</a> #}
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="no-reports-message">目前还没有相关的招领启事。提交您的寻宠信息后，我们会通知您新的匹配。</p>
+        {% endif %}
+    </div>
+    <!-- End Section for Recent Found Reports -->
+
     <script>
         const breedsData = {
             '猫': ['英国短毛猫', '美国短毛猫', '布偶猫', '波斯猫', '暹罗猫', '中华田园猫', '其他品种'],

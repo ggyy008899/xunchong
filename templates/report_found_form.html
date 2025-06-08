@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>发布招领启事</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    {% if baidu_map_ak %}
+    <script type="text/javascript" src="https://api.map.baidu.com/api?v=3.0&ak={{ baidu_map_ak }}"></script>
+    {% endif %}
     <style>
         label {
             display: block;
@@ -95,8 +98,15 @@
         <label for="found_time" class="required">拾获时间:</label>
         <input type="datetime-local" id="found_time" name="found_time" required value="{{ form_data.found_time if form_data else '' }}">
 
-        <label for="found_location_text" class="required">拾获地点文字描述:</label>
-        <input type="text" id="found_location_text" name="found_location_text" required placeholder="例如: 北京市朝阳区xx小区附近" value="{{ form_data.found_location_text if form_data else '' }}">
+        <label for="found_location_text" class="required">输入拾获地点关键字搜索:</label>
+        <input type="text" id="found_location_text" name="found_location_text" required placeholder="例如: 北京市朝阳区xx小区 或 东方明珠" value="{{ form_data.found_location_text if form_data else '' }}" autocomplete="off">
+        {# Suggestions panel will be automatically managed by Baidu Autocomplete #}
+        
+        <div id="baidu-map-container-found" style="width: 95%; height: 300px; margin-top: 10px; border: 1px solid #ccc;"></div>
+        <div id="selected-coords-found" style="margin-top: 5px; font-size: 0.9em; color: #555;">请在地图上点击选择精确位置，或通过上方输入框搜索。</div>
+
+        <input type="hidden" id="latitude" name="latitude" value="{{ form_data.latitude if form_data else '' }}">
+        <input type="hidden" id="longitude" name="longitude" value="{{ form_data.longitude if form_data else '' }}">
 
         <label for="contact_info" class="required">联系方式:</label>
         <input type="text" id="contact_info" name="contact_info" required placeholder="例如: 电话 138******** 或微信号" value="{{ form_data.contact_info if form_data else '' }}">
@@ -107,6 +117,43 @@
 
         <button type="submit">提交招领启事</button>
     </form>
+
+    <!-- Section for Recent Lost Reports (Not Found Yet) -->
+    <div class="recent-reports-container">
+        <h2>您捡到的宠物是否正在被寻找？</h2>
+        <p>看看最近的寻宠启事，TA的主人可能很着急：</p>
+
+        {% if recent_lost_reports and recent_lost_reports|length > 0 %}
+            <div class="reports-list reports-list-condensed"> <!-- Added reports-list-condensed -->
+                {% for report_item in recent_lost_reports %}
+                    <div class="report-card lost-report"> <!-- Added lost-report class -->
+                        <h3>紧急寻宠：{{ report_item.pet_type }} - {% if report_item.breed == '其他品种' %}{{ report_item.other_breed }}{% else %}{{ report_item.breed }}{% endif %}</h3>
+                        
+                        {% if report_item.photo_urls and report_item.photo_urls|length > 0 %}
+                            <div class="photo-gallery">
+                                {% for photo_filename in report_item.photo_urls %}
+                                     <img src="{{ url_for('static', filename='uploads/' + photo_filename) }}" alt="宠物照片" class="pet-photo-thumbnail">
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p><em>(无照片)</em></p>
+                        {% endif %}
+
+                        <p><strong>颜色:</strong> {{ report_item.color }}</p>
+                        <p><strong>性别:</strong> {{ report_item.gender }}</p>
+                        <p><strong>特征描述:</strong> {{ report_item.features | truncate(80) }}</p>
+                        <p><strong>丢失地点:</strong> {{ report_item.lost_location_text | truncate(80) }}</p>
+                        <p><strong>丢失时间:</strong> {{ report_item.lost_time.strftime('%Y-%m-%d %H:%M') if report_item.lost_time else '未知' }}</p>
+                        <p class="report-meta">发布于: {{ report_item.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                        {# <a href="#" class="button-link">查看详情</a> #}
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="no-reports-message">目前还没有相关的寻宠启事。感谢您的爱心！</p>
+        {% endif %}
+    </div>
+    <!-- End Section for Recent Lost Reports -->
 
     <script>
         const breedsData = {
@@ -167,6 +214,132 @@
             checkOtherBreed(this.value);
         });
 
+        function initMapBaiduFound(apiKey) {
+            console.log("[DEBUG] Initializing Baidu Map for found pet form with AK: " + apiKey);
+            var map = new BMap.Map("baidu-map-container-found");
+            var point = new BMap.Point(116.404, 39.915); // Default to Beijing
+            map.centerAndZoom(point, 12);
+            map.enableScrollWheelZoom(true);
+            map.addControl(new BMap.NavigationControl());
+            map.addControl(new BMap.ScaleControl());
+            map.addControl(new BMap.OverviewMapControl());
+            map.addControl(new BMap.MapTypeControl());
+
+            var currentMarker = null;
+            var selectedLocationSpan = document.getElementById('selected-coords-found');
+            var latitudeInput = document.getElementById('latitude');
+            var longitudeInput = document.getElementById('longitude');
+            var initialLat = parseFloat(latitudeInput.value);
+            var initialLng = parseFloat(longitudeInput.value);
+
+            if (!isNaN(initialLat) && !isNaN(initialLng) && initialLat >= -90 && initialLat <= 90 && initialLng >= -180 && initialLng <= 180) {
+                var initialPoint = new BMap.Point(initialLng, initialLat);
+                map.centerAndZoom(initialPoint, 18);
+                currentMarker = new BMap.Marker(initialPoint);
+                map.addOverlay(currentMarker);
+                currentMarker.enableDragging();
+                currentMarker.addEventListener("dragend", function(e){
+                    latitudeInput.value = e.point.lat.toFixed(6);
+                    longitudeInput.value = e.point.lng.toFixed(6);
+                    updateLocationTextFound(e.point.lat, e.point.lng);
+                });
+                updateLocationTextFound(initialLat, initialLng);
+            } else {
+                var geolocation = new BMap.Geolocation();
+                geolocation.getCurrentPosition(function(r){
+                    if(this.getStatus() == BMAP_STATUS_SUCCESS){
+                        map.panTo(r.point);
+                    }
+                    else {
+                        console.log('Geolocation failed for found form: ' + this.getStatus());
+                    }
+                },{enableHighAccuracy: true});
+            }
+            
+            function updateLocationTextFound(lat, lng) {
+                var geoc = new BMap.Geocoder();
+                geoc.getLocation(new BMap.Point(lng, lat), function(rs){
+                    var addComp = rs.addressComponents;
+                    var address = addComp.province + addComp.city + addComp.district + addComp.street + addComp.streetNumber;
+                    if (selectedLocationSpan) {
+                        if (address && address.trim() !== "") {
+                            selectedLocationSpan.textContent = `已选: ${address} (坐标: ${lat.toFixed(6)}, ${lng.toFixed(6)})`;
+                            selectedLocationSpan.style.color = 'green';
+                            document.getElementById('found_location_text').value = address;
+                        } else {
+                            selectedLocationSpan.textContent = `已选坐标: ${lat.toFixed(6)}, ${lng.toFixed(6)} (无法获取详细地址)`;
+                            selectedLocationSpan.style.color = 'orange';
+                        }
+                    }
+                });
+            }
+
+            map.addEventListener("click", function(e){
+                if (currentMarker) {
+                    map.removeOverlay(currentMarker);
+                }
+                var clickedPoint = e.point;
+                latitudeInput.value = clickedPoint.lat.toFixed(6);
+                longitudeInput.value = clickedPoint.lng.toFixed(6);
+                
+                currentMarker = new BMap.Marker(clickedPoint);
+                map.addOverlay(currentMarker);
+                currentMarker.enableDragging();
+                currentMarker.addEventListener("dragend", function(e_drag){
+                    latitudeInput.value = e_drag.point.lat.toFixed(6);
+                    longitudeInput.value = e_drag.point.lng.toFixed(6);
+                    updateLocationTextFound(e_drag.point.lat, e_drag.point.lng);
+                });
+                updateLocationTextFound(clickedPoint.lat, clickedPoint.lng);
+            });
+
+            var searchInput = document.getElementById('found_location_text');
+            var autocomplete = new BMap.Autocomplete({
+                "input" : searchInput,
+                "location" : map
+            });
+
+            autocomplete.addEventListener("onconfirm", function(e) {
+                var _value = e.item.value;
+                var myValue = _value.province +  _value.city +  _value.district +  _value.street +  _value.business;
+                if (selectedLocationSpan) {
+                    selectedLocationSpan.textContent = "正在定位: " + myValue;
+                    selectedLocationSpan.style.color = 'orange';
+                }
+
+                if (currentMarker) {
+                    map.removeOverlay(currentMarker);
+                }
+
+                var localSearch = new BMap.LocalSearch(map, {
+                    onSearchComplete: function(){
+                        if (localSearch.getResults() && localSearch.getResults().getPoi(0)) {
+                            var pp = localSearch.getResults().getPoi(0).point;
+                            map.centerAndZoom(pp, 18);
+                            latitudeInput.value = pp.lat.toFixed(6);
+                            longitudeInput.value = pp.lng.toFixed(6);
+                            currentMarker = new BMap.Marker(pp);
+                            map.addOverlay(currentMarker);
+                            currentMarker.enableDragging();
+                            currentMarker.addEventListener("dragend", function(e_drag){
+                                latitudeInput.value = e_drag.point.lat.toFixed(6);
+                                longitudeInput.value = e_drag.point.lng.toFixed(6);
+                                updateLocationTextFound(e_drag.point.lat, e_drag.point.lng);
+                            });
+                            updateLocationTextFound(pp.lat, pp.lng);
+                        } else {
+                            if (selectedLocationSpan) {
+                                selectedLocationSpan.textContent = "未能精确定位: " + myValue + "。请在地图上手动选择。";
+                                selectedLocationSpan.style.color = 'red';
+                            }
+                        }
+                    }
+                });
+                localSearch.search(myValue);
+            });
+            console.log("[DEBUG] initMapBaiduFound function for Baidu Map finished execution.");
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             const initialPetType = petTypeSelect.value;
             const initialBreed = "{{ form_data.breed if form_data else '' }}";
@@ -184,6 +357,25 @@
             } else {
                  populateBreeds(''); // Ensure breed dropdown is in a sensible default state
             }
+
+            {% if baidu_map_ak %}
+                initMapBaiduFound('{{ baidu_map_ak }}'); 
+            {% else %}
+                console.warn("Baidu Map API Key not provided for found pet form. Map functionality disabled.");
+                const mapRelatedElements = ['baidu-map-container-found', 'selected-coords-found'];
+                mapRelatedElements.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.style.display = 'none';
+                });
+                const keywordInput = document.getElementById('found_location_text');
+                if (keywordInput && keywordInput.tagName.toLowerCase() === 'input') { // Ensure it's the input, not textarea
+                    keywordInput.placeholder = "地图功能不可用，请手动输入详细地址";
+                }
+                const locationLabel = document.querySelector('label[for="found_location_text"]');
+                if (locationLabel) {
+                    locationLabel.textContent = '拾获地点描述 (地图不可用):';
+                }
+            {% endif %}
             
             // Image preview logic
             const photosInput = document.getElementById('photos');

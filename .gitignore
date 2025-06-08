@@ -110,3 +110,6 @@ env/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# SQLite database file
+app.db

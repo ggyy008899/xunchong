@@ -9,6 +9,7 @@ from werkzeug.utils import secure_filename
 import uuid
 import json
 import hashlib # Import hashlib for SHA1
+from sqlalchemy import desc # For explicit descending order
 import xml.etree.ElementTree as ET # For parsing WeChat XML
 
 def create_app(config_class=Config):
@@ -191,6 +192,9 @@ def create_app(config_class=Config):
         current_app.logger.info(f"[report_lost route] BAIDU_MAP_AK used: {'<Not Set>' if not baidu_map_ak else baidu_map_ak[:5] + '...'}")
         # -----------------------------------------
 
+        # Fetch recent found reports to display on the form page
+        recent_found_reports = PetFoundReport.query.order_by(PetFoundReport.created_at.desc()).limit(5).all()
+
         if request.method == 'POST':
             # --- Validation --- 
             # (Existing validation code remains the same)
@@ -200,7 +204,7 @@ def create_app(config_class=Config):
 
             if breed_select == '其他品种' and not other_breed_text:
                 flash('选择了“其他品种”时，请填写具体品种。', 'error')
-                return render_template('report_lost_form.html', title='发布寻宠启事 - 错误', form_data=form_data, baidu_map_ak=baidu_map_ak)
+                return render_template('report_lost_form.html', title='发布寻宠启事 - 必填项缺失', form_data=form_data, baidu_map_ak=baidu_map_ak, recent_found_reports=recent_found_reports)
 
             missing_fields = [field for field in required_fields if not request.form.get(field)]
             # Adjust missing fields check if '其他品种' is selected but text is provided
@@ -209,8 +213,7 @@ def create_app(config_class=Config):
             
             if missing_fields:
                 flash(f'请填写所有必填项: {", ".join(missing_fields)}', 'error')
-                return render_template('report_lost_form.html', title='发布寻宠启事 - 错误', form_data=form_data, baidu_map_ak=baidu_map_ak)
-            # --- End Validation ---
+                return render_template('report_lost_form.html', title='发布寻宠启事 - 必填项缺失', form_data=form_data, baidu_map_ak=baidu_map_ak, recent_found_reports=recent_found_reports)
 
             # --- Handle file uploads --- 
             photo_urls = []
@@ -220,7 +223,7 @@ def create_app(config_class=Config):
 
             if not upload_folder_path:
                 flash('服务器上传文件夹配置错误。', 'error')
-                return render_template('report_lost_form.html', title='发布寻宠启事 - 错误', form_data=form_data, baidu_map_ak=baidu_map_ak)
+                return render_template('report_lost_form.html', title='发布寻宠启事 - 必填项缺失', form_data=form_data, baidu_map_ak=baidu_map_ak, recent_found_reports=recent_found_reports)
 
             for file in uploaded_files:
                 if file and file.filename != '':
@@ -244,21 +247,14 @@ def create_app(config_class=Config):
                     except Exception as e:
                         flash(f'图片上传失败: {e}', 'error')
                         # Consider if partial success is acceptable or should halt
-                        # return render_template('report_lost_form.html', title='发布寻宠启事 - 错误', form_data=form_data)
-            # --- End File Uploads ---
-
-            # --- Determine actual breed value --- 
-            actual_breed = breed_select
-            if breed_select == '其他品种':
-                actual_breed = other_breed_text # Use the user-provided other breed text
-            # ---------------------------------- 
+                        # return render_template('report_lost_form.html', title='发布寻宠启事 - 必填项缺失', form_data=form_data)
 
             # --- Create new report object --- 
             try:
                 lost_time_dt = datetime.strptime(request.form['lost_time'], '%Y-%m-%dT%H:%M')
             except ValueError:
                  flash('丢失时间格式无效，请使用日期时间选择器。', 'error')
-                 return render_template('report_lost_form.html', title='发布寻宠启事 - 错误', form_data=form_data, baidu_map_ak=baidu_map_ak)
+                 return render_template('report_lost_form.html', title='发布寻宠启事 - 必填项缺失', form_data=form_data, baidu_map_ak=baidu_map_ak, recent_found_reports=recent_found_reports)
             
             # --- 获取经纬度 --- 
             latitude = request.form.get('latitude')
@@ -279,8 +275,7 @@ def create_app(config_class=Config):
             try:
                 new_report = PetLostReport(
                     pet_type=request.form['pet_type'],
-                    breed=actual_breed, # Pass the determined actual_breed
-                    # REMOVED invalid keyword: other_breed=request.form.get('other_breed') if request.form['breed'] == '其他品种' else None,
+                    breed=request.form['breed'],
                     color=request.form['color'],
                     gender=request.form['gender'],
                     age=request.form.get('age'),
@@ -300,16 +295,22 @@ def create_app(config_class=Config):
                 db.session.rollback()
                 app.logger.error(f"Error creating report: {e}") # Log the actual error
                 flash(f'发布启事时发生数据库错误，请稍后重试。', 'error') # User-friendly message
-                return render_template('report_lost_form.html', title='发布寻宠启事 - 错误', form_data=form_data, baidu_map_ak=baidu_map_ak)
+                return render_template('report_lost_form.html', title='发布寻宠启事 - 必填项缺失', form_data=form_data, baidu_map_ak=baidu_map_ak, recent_found_reports=recent_found_reports)
             # --- End Create Report ---
 
-        # If GET request, just render the form, passing the API key
-        return render_template('report_lost_form.html', title='发布寻宠启事', form_data={}, baidu_map_ak=baidu_map_ak)
+        # If GET request, just render the form
+        return render_template('report_lost_form.html', title='发布寻宠启事', form_data={}, baidu_map_ak=baidu_map_ak, recent_found_reports=recent_found_reports)
 
     # --- Route for submitting Pet Found reports (招领启事) ---
     @app.route('/report/found', methods=['GET', 'POST'])
     def report_found():
         form_data = request.form.to_dict() # For repopulating form on GET or error
+        baidu_map_ak = current_app.config.get('BAIDU_MAP_API_KEY')
+        if not baidu_map_ak:
+            current_app.logger.warning("BAIDU_MAP_API_KEY for report_found is not set. Map functionality will be affected.")
+
+        # Query recent lost reports for display on the form page (GET or POST error)
+        recent_lost_reports = PetLostReport.query.order_by(desc(PetLostReport.created_at)).limit(5).all()
 
         if request.method == 'POST':
             # --- Handle Photo Uploads (similar to report_lost) ---
@@ -327,10 +328,12 @@ def create_app(config_class=Config):
                         except Exception as e:
                             current_app.logger.error(f"Error saving uploaded file: {e}")
                             flash('上传照片时出错，请检查文件或稍后再试。', 'error')
-                            return render_template('report_found_form.html', title='发布招领启事 - 文件错误', form_data=form_data)
+                            return render_template('report_found_form.html', title='发布招领启事 - 必填项缺失', form_data=form_data, recent_lost_reports=recent_lost_reports, baidu_map_ak=baidu_map_ak)
                     elif file.filename != '': # If file exists but is not allowed
-                        flash(f'文件类型 "{file.filename.rsplit('.', 1)[1]}" 不被允许。请上传图片文件。', 'error')
-                        return render_template('report_found_form.html', title='发布招领启事 - 文件类型错误', form_data=form_data)
+                        _, ext = os.path.splitext(file.filename)
+                        allowed_extensions_str = ', '.join(current_app.config['ALLOWED_EXTENSIONS'])
+                        flash(f'文件类型 "{ext}" 不被允许。请上传以下类型的文件: {allowed_extensions_str}。', 'error')
+                        return render_template('report_found_form.html', title='发布招领启事 - 文件类型错误', form_data=form_data, recent_lost_reports=recent_lost_reports, baidu_map_ak=baidu_map_ak)
             
             # --- Process 'other_breed' --- 
             breed = request.form.get('breed')
@@ -339,7 +342,7 @@ def create_app(config_class=Config):
                 other_breed_value = request.form.get('other_breed', '').strip()
                 if not other_breed_value:
                     flash('选择了“其他品种”但未填写具体品种名称。', 'error')
-                    return render_template('report_found_form.html', title='发布招领启事 - 品种错误', form_data=form_data)
+                    return render_template('report_found_form.html', title='发布招领启事 - 品种错误', form_data=form_data, recent_lost_reports=recent_lost_reports, baidu_map_ak=baidu_map_ak)
                 actual_breed = other_breed_value
             elif not breed: # If breed is optional and not selected, set to None or empty string based on model
                 actual_breed = None # Or '' if your model prefers empty strings for nullable charfields
@@ -352,10 +355,25 @@ def create_app(config_class=Config):
                     found_time_dt = datetime.fromisoformat(found_time_str)
                 except ValueError:
                     flash('拾获时间格式无效，请使用日期时间选择器。', 'error')
-                    return render_template('report_found_form.html', title='发布招领启事 - 时间错误', form_data=form_data)
+                    return render_template('report_found_form.html', title='发布招领启事 - 时间错误', form_data=form_data, recent_lost_reports=recent_lost_reports, baidu_map_ak=baidu_map_ak)
             else:
                 flash('拾获时间是必填项。', 'error')
-                return render_template('report_found_form.html', title='发布招领启事 - 时间错误', form_data=form_data)
+                return render_template('report_found_form.html', title='发布招领启事 - 时间错误', form_data=form_data, recent_lost_reports=recent_lost_reports, baidu_map_ak=baidu_map_ak)
+
+            # --- 获取经纬度 ---
+            latitude = request.form.get('latitude')
+            longitude = request.form.get('longitude')
+            lat_float = None
+            lon_float = None
+            try:
+                if latitude:
+                    lat_float = float(latitude)
+                if longitude:
+                    lon_float = float(longitude)
+            except ValueError:
+                current_app.logger.warning(f"Invalid latitude/longitude format received for found pet: lat='{latitude}', lon='{longitude}'")
+                # Optionally, flash an error message, but map selection should prevent this.
+                pass # Allow submission, coordinates will be null
 
             try:
                 new_found_report = PetFoundReport(
@@ -367,6 +385,8 @@ def create_app(config_class=Config):
                     found_time=found_time_dt,
                     found_location_text=request.form['found_location_text'],
                     contact_info=request.form['contact_info'],
+                    latitude=lat_float,
+                    longitude=lon_float,
                     _photo_urls=json.dumps(photo_urls) if photo_urls else None # Store as JSON string
                 )
                 db.session.add(new_found_report)
@@ -377,10 +397,10 @@ def create_app(config_class=Config):
                 db.session.rollback()
                 current_app.logger.error(f"Error creating found report: {e}")
                 flash('发布招领启事时发生数据库错误，请稍后重试。', 'error')
-                return render_template('report_found_form.html', title='发布招领启事 - 错误', form_data=form_data)
+                return render_template('report_found_form.html', title='发布招领启事 - 错误', form_data=form_data, recent_lost_reports=recent_lost_reports, baidu_map_ak=baidu_map_ak)
 
         # If GET request, just render the form
-        return render_template('report_found_form.html', title='发布招领启事', form_data={})
+        return render_template('report_found_form.html', title='发布招领启事', form_data={}, recent_lost_reports=recent_lost_reports, baidu_map_ak=baidu_map_ak)
 
     # ------------------ 标记为已找到 ------------------
     @app.route('/report/<int:report_id>/found', methods=['POST'])

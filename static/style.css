@@ -54,11 +54,64 @@ a:hover {
     border: 1px solid #eee;
 }
 
-/* -- 启事卡片样式 -- */
+/* -- 启事卡片样式 (通用) -- */
 .report-card {
-    /* 之前的内联样式：border: 1px solid #ccc; border-radius: 5px; padding: 15px; margin-bottom: 15px; */
-    background-color: #f9f9f9; /* 默认背景色 */
-    /* border, border-radius, padding, margin-bottom 保留在 HTML 的 style 属性中暂时不动 */
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px; /* 卡片之间的垂直间距 */
+    background-color: #fff; /* 统一白色背景 */
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    display: flex; /* 使用 flex 布局 */
+    flex-direction: column; /* 内容垂直排列 */
+    justify-content: space-between; /* 使得内容和 '发布于' 时间戳能更好地分布 */
+}
+
+.report-card h3 {
+    font-size: 1.2em;
+    margin-top: 0;
+    margin-bottom: 15px;
+}
+
+.report-card.lost-report h3 { /* 寻宠启事卡片标题 */
+    color: #dc3545; /* 红色强调 */
+}
+
+.report-card.found-report h3 { /* 招领启事卡片标题 */
+    color: #007bff; /* 蓝色 */
+}
+
+.report-card .photo-gallery {
+    /* .photo-gallery 已有全局样式，这里可以覆写或补充 */
+    margin-bottom: 15px;
+}
+
+.report-card .pet-photo-thumbnail {
+    /* .pet-photo-thumbnail 已有全局样式，这里确保一致性 */
+    width: 70px; /* 统一卡片内照片尺寸 */
+    height: 70px;
+    border: 1px solid #ddd;
+}
+
+.report-card p {
+    margin-bottom: 8px;
+    font-size: 0.95em; /* 统一卡片内段落文字大小 */
+    line-height: 1.5;
+    color: #555;
+}
+
+.report-card p strong {
+    color: #333;
+}
+
+.report-card .report-meta {
+    font-size: 0.85em;
+    color: #777;
+    margin-top: 15px; /* 与主要内容分隔开 */
+    border-top: 1px solid #eee;
+    padding-top: 10px;
+    align-self: flex-start; /* 确保在 flex 容器中靠底部 */
+    width: 100%; /* 占满宽度以应用 border-top */
 }
 
 .report-card.is-found {
@@ -97,6 +150,56 @@ a:hover {
 
 .mark-found-button:hover {
     background-color: #e0a800; /* 鼠标悬停时颜色变深 */
+}
+
+/* -- 最近启事列表容器 (用于发布表单页) -- */
+.recent-reports-container {
+    margin-top: 40px;
+    padding: 0 15px; /* 保持页面内边距一致 */
+}
+
+.recent-reports-container h2 {
+    font-size: 1.6em; /* 稍微增大标题 */
+    margin-bottom: 15px; /* 调整间距 */
+    color: #333;
+    font-weight: 600;
+}
+
+.recent-reports-container > p { /* 指向容器下的直接子p元素 */
+    margin-bottom: 25px;
+    color: #555;
+    font-size: 1.05em;
+}
+
+/* -- 启事列表通用网格布局 -- */
+.reports-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); /* 响应式网格 */
+    gap: 20px; /* 卡片间距 */
+}
+
+.reports-list-condensed .report-card {
+    padding: 15px; /* 紧凑型卡片可以有小一点的内边距 */
+}
+
+.reports-list-condensed .report-card h3 {
+    font-size: 1.1em; /* 紧凑型卡片标题小一点 */
+    margin-bottom: 10px;
+}
+
+.reports-list-condensed .pet-photo-thumbnail {
+    width: 60px;
+    height: 60px;
+}
+
+.no-reports-message {
+    margin-top: 20px;
+    color: #777;
+    background-color: #f9f9f9;
+    padding: 20px; /* 增加内边距 */
+    border-radius: 5px;
+    text-align: center; /* 居中显示 */
+    border: 1px dashed #ddd;
 }
 
 /* -- 搜索表单样式 -- */

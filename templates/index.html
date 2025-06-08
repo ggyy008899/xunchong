@@ -10,35 +10,8 @@
     <script charset="utf-8" src="https://map.qq.com/api/js?v=2.exp&key={{ tencent_map_api_key }}"></script>
     {% endif %}
     <style>
-        .report-card {
-            border: 1px solid #ccc;
-            border-radius: 5px; 
-            padding: 15px; 
-            margin-bottom: 15px;
-        }
-        .photo-gallery {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-        .pet-photo-thumbnail {
-            width: 100px;
-            height: 100px;
-            margin: 5px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-        }
-        .found-badge {
-            background-color: #dff0d8;
-            color: #3c763d;
-            padding: 2px 5px;
-            border-radius: 3px;
-            font-size: 12px;
-        }
-        .found-time {
-            font-size: 12px;
-            color: #666;
-        }
+        /* General page specific styles can remain here if any */
+        /* Report card related styles have been moved to style.css */
     </style>
 </head>
 <body>
@@ -95,7 +68,7 @@
     <div class="reports-list">
         {% if lost_reports %}
             {% for report in lost_reports %}
-                <div class="report-card {% if report.is_found %}is-found{% endif %}" style="border: 1px solid #ccc; border-radius: 5px; padding: 15px; margin-bottom: 15px;"> 
+                <div class="report-card lost-report {% if report.is_found %}is-found{% endif %}"> 
                     <h3>寻找 {{ report.pet_type }}: {% if report.breed == '其他品种' %}{{ report.other_breed }}{% else %}{{ report.breed }}{% endif %}
                      {# --- 显示 '已找到' 标签 --- #}
                      {% if report.is_found %}
@@ -131,12 +104,11 @@
                         </form>
                     {% endif %}
                     {# ------------------ #}
-                     <p style="font-size: 0.8em; color: #666; margin-top: 10px;">发布于: {{ report.created_at.strftime('%Y-%m-%d %H:%M') }}</p> {# 加点上边距 #}
+                     <p class="report-meta">发布于: {{ report.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
                 </div>
             {% endfor %}
         {% else %}
-            <p>目前还没有寻宠启事。</p>
-            <p>或者没有符合您筛选条件的启事。</p> {# 搜索无结果时的提示 #}
+            <p class="no-reports-message">目前还没有寻宠启事，或没有符合您筛选条件的启事。</p>
         {% endif %}
     </div>
 
@@ -146,11 +118,11 @@
         {% for report in lost_reports %}
             {% if report.latitude is not none and report.longitude is not none %}
                 markersData.push({
-                    lat: {{ report.latitude }},
-                    lng: {{ report.longitude }},
-                    title: "{{ report.pet_type }} ({{ report.breed if report.breed else '未知品种' }})",
-                    description: "{{ report.lost_location_text | replace('\n', ' ') | replace('\r', '') | escape }}", // 简单处理换行并转义
-                    id: {{ report.id }}
+                    lat: {{ report.latitude | tojson }},
+                    lng: {{ report.longitude | tojson }},
+                    title: {{ (report.pet_type ~ " - " ~ (report.other_breed if report.breed == '其他品种' else report.breed)) | tojson }},
+                    description: {{ ("丢失地点: " ~ report.lost_location_text) | tojson }},
+                    id: {{ report.id | tojson }}
                 });
             {% endif %}
         {% endfor %}

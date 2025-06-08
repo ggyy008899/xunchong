@@ -66,6 +66,8 @@ class PetFoundReport(db.Model):
     features = db.Column(db.Text, nullable=False)
     found_time = db.Column(db.DateTime, nullable=False)
     found_location_text = db.Column(db.Text, nullable=False)
+    latitude = db.Column(db.Float, nullable=True)  # 新增：纬度
+    longitude = db.Column(db.Float, nullable=True) # 新增：经度
     contact_info = db.Column(db.String(255), nullable=False)
     _photo_urls = db.Column(db.Text, nullable=True) # Store as JSON string
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
