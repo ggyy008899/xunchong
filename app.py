@@ -11,6 +11,7 @@ import json
 import hashlib # Import hashlib for SHA1
 from sqlalchemy import desc # For explicit descending order
 import xml.etree.ElementTree as ET # For parsing WeChat XML
+import time # For CreateTime in WeChat messages
 
 def create_app(config_class=Config):
     app = Flask(__name__)
@@ -192,10 +193,55 @@ def create_app(config_class=Config):
                 current_app.logger.info(log_message)
                 
                 # For menu clicks leading to URLs (view events), WeChat handles the redirect.
-                # For other events or text messages, we just need to acknowledge receipt.
-                # WeChat requires a response of "success" or an empty string.
-                # Responding with an empty string is often safer.
-                return "", 200 # Return empty string and 200 OK
+                # For 'CLICK' events, we need to respond with a message (e.g., news/article).
+                if msg_type == 'event' and event == 'CLICK':
+                    # --- Define menu event keys and their corresponding H5 page URLs --- 
+                    # Ensure your domain/IP is correct and publicly accessible
+                    base_url = current_app.config.get('APP_BASE_URL', f"http://{request.host}") # Fallback to request.host if not set
+                    
+                    menu_actions = {
+                        'USER_REPORT_LOST': {
+                            'title': '发布寻宠启事',
+                            'description': '您的爱宠不慎走失？点击这里填写信息，让更多人帮您寻找。',
+                            'pic_url': '', # Optional: Add a URL to an image
+                            'url': f"{base_url}/report/lost"
+                        },
+                        'USER_REPORT_FOUND': {
+                            'title': '发布招领信息',
+                            'description': '您捡到了需要帮助的小可爱？点击这里为它寻找主人。',
+                            'pic_url': '',
+                            'url': f"{base_url}/report/found"
+                        },
+                        'VIEW_LOST_REPORTS': {
+                            'title': '查看寻宠启事',
+                            'description': '看看最近有哪些正在寻找的宠物，也许您能提供线索。',
+                            'pic_url': '',
+                            'url': f"{base_url}/?report_type=lost"
+                        },
+                        'VIEW_FOUND_REPORTS': {
+                            'title': '查看招领信息',
+                            'description': '这些小可爱正在等待主人，快来看看有没有您认识的。',
+                            'pic_url': '',
+                            'url': f"{base_url}/?report_type=found"
+                        }
+                    }
+
+                    action_details = menu_actions.get(event_key)
+
+                    if action_details:
+                        response_xml = create_news_response(
+                            to_user=from_user_name, # Swap sender and receiver
+                            from_user=to_user_name,
+                            articles=[action_details] # Pass as a list of one article
+                        )
+                        current_app.logger.info(f"Responding to EventKey '{event_key}' with news message.")
+                        return response_xml, 200, {'Content-Type': 'application/xml'}
+                    else:
+                        current_app.logger.warning(f"No action defined for EventKey: {event_key}")
+                        return "", 200 # Fallback: acknowledge if key is unknown
+                else:
+                    # For other events or text messages, just acknowledge receipt.
+                    return "", 200 # Return empty string and 200 OK
 
             except ET.ParseError as e:
                 current_app.logger.error(f'WeChat POST: XML ParseError: {e} - Data: {request.data[:200]}')
@@ -455,6 +501,33 @@ def create_app(config_class=Config):
         current_app.logger.info("Finished db.create_all(). Tables should now exist if models are defined.")
 
     return app
+
+# --- Helper function to create a news (article) response XML for WeChat --- 
+def create_news_response(to_user, from_user, articles):
+    """
+    Creates an XML string for a WeChat news message.
+    :param to_user: The recipient's OpenID.
+    :param from_user: The sender's (your app's) OpenID/original ToUserName.
+    :param articles: A list of article dictionaries. Each dict should have 'title', 'description', 'pic_url', 'url'.
+    :return: XML string.
+    """
+    xml_response = "<xml>"
+    xml_response += f"<ToUserName><![CDATA[{to_user}]]></ToUserName>"
+    xml_response += f"<FromUserName><![CDATA[{from_user}]]></FromUserName>"
+    xml_response += f"<CreateTime>{int(time.time())}</CreateTime>"
+    xml_response += "<MsgType><![CDATA[news]]></MsgType>"
+    xml_response += f"<ArticleCount>{len(articles)}</ArticleCount>"
+    xml_response += "<Articles>"
+    for article in articles:
+        xml_response += "<item>"
+        xml_response += f"<Title><![CDATA[{article.get('title', '')}]]></Title>"
+        xml_response += f"<Description><![CDATA[{article.get('description', '')}]]></Description>"
+        xml_response += f"<PicUrl><![CDATA[{article.get('pic_url', '')}]]></PicUrl>"
+        xml_response += f"<Url><![CDATA[{article.get('url', '')}]]></Url>"
+        xml_response += "</item>"
+    xml_response += "</Articles>"
+    xml_response += "</xml>"
+    return xml_response
 
 if __name__ == '__main__':
     app = create_app()

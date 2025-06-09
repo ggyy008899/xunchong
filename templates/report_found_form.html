@@ -157,8 +157,9 @@
 
     <script>
         const breedsData = {
-            '猫': ['英国短毛猫', '美国短毛猫', '布偶猫', '波斯猫', '暹罗猫', '中华田园猫', '其他品种'],
-            '狗': ['泰迪犬', '金毛寻回犬', '拉布拉多寻回犬', '哈士奇', '柯基犬', '中华田园犬', '其他品种']
+            '猫': ['英国短毛猫', '美国短毛猫', '布偶猫', '波斯猫', '暹罗猫', '缅因猫', '金吉拉', '异国短毛猫', '苏格兰折耳猫', '挪威森林猫', '斯芬克斯猫', '德文卷毛猫', '俄罗斯蓝猫', '中华田园猫', '其他品种'],
+            '狗': ['泰迪犬', '贵宾犬', '比熊犬', '博美犬', '雪纳瑞', '吉娃娃', '巴哥犬', '法国斗牛犬', '英国斗牛犬', '金毛寻回犬', '拉布拉多寻回犬', '哈士奇', '萨摩耶犬', '边境牧羊犬', '柯基犬', '柴犬', '中华田园犬', '其他品种']
+            // Add more types and breeds as needed
         };
 
         const petTypeSelect = document.getElementById('pet_type');
@@ -217,85 +218,97 @@
         function initMapBaiduFound(apiKey) {
             console.log("[DEBUG] Initializing Baidu Map for found pet form with AK: " + apiKey);
             var map = new BMap.Map("baidu-map-container-found");
-            var point = new BMap.Point(116.404, 39.915); // Default to Beijing
-            map.centerAndZoom(point, 12);
-            map.enableScrollWheelZoom(true);
+            var geocoder = new BMap.Geocoder(); // 用于逆地址解析
+            var currentMarker = null; // 用于存储当前标记
+            var latitudeInput = document.getElementById('latitude');
+            var longitudeInput = document.getElementById('longitude');
+            var selectedLocationSpan = document.getElementById('selected-coords-found');
+            var locationTextInput = document.getElementById('found_location_text'); // Specific to this form
+
+            // 尝试获取用户当前位置
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    // 成功获取位置
+                    var userLat = position.coords.latitude;
+                    var userLng = position.coords.longitude;
+                    var userPoint = new BMap.Point(userLng, userLat);
+                    
+                    console.log("[DEBUG] User geolocation acquired:", userLat, userLng);
+                    map.centerAndZoom(userPoint, 15); // 以用户位置为中心，并设置缩放级别
+                    updateLocationFields(userPoint); // 使用获取到的用户位置更新信息
+
+                }, function(error) {
+                    // 获取位置失败或用户拒绝
+                    console.warn("[DEBUG] Geolocation failed or was denied:", error.message);
+                    // 使用默认位置初始化地图 (例如：北京)
+                    var defaultPoint = new BMap.Point(126.63, 45.75); // 哈尔滨市中心
+                    map.centerAndZoom(defaultPoint, 12);
+                    selectedLocationSpan.textContent = '无法获取当前位置。请在地图上点击选择，或搜索地点。当前默认显示哈尔滨。';
+                    selectedLocationSpan.style.color = 'gray';
+                });
+            } else {
+                // 浏览器不支持Geolocation
+                console.warn("[DEBUG] Browser does not support geolocation.");
+                // 使用默认位置初始化地图
+                var defaultPoint = new BMap.Point(126.63, 45.75); // 哈尔滨市中心
+                map.centerAndZoom(defaultPoint, 12);
+                selectedLocationSpan.textContent = '浏览器不支持自动定位。请在地图上点击选择，或搜索地点。当前默认显示哈尔滨。';
+                selectedLocationSpan.style.color = 'gray';
+            }
+
+            // 1. 添加地图控件：平移缩放控件、比例尺控件、缩略地图控件
             map.addControl(new BMap.NavigationControl());
             map.addControl(new BMap.ScaleControl());
             map.addControl(new BMap.OverviewMapControl());
-            map.addControl(new BMap.MapTypeControl());
+            map.enableScrollWheelZoom(); // 启用滚轮放大缩小
 
-            var currentMarker = null;
-            var selectedLocationSpan = document.getElementById('selected-coords-found');
-            var latitudeInput = document.getElementById('latitude');
-            var longitudeInput = document.getElementById('longitude');
-            var initialLat = parseFloat(latitudeInput.value);
-            var initialLng = parseFloat(longitudeInput.value);
+            // Function to update location fields and map marker
+            function updateLocationFields(point) {
+                latitudeInput.value = point.lat.toFixed(6);
+                longitudeInput.value = point.lng.toFixed(6);
 
-            if (!isNaN(initialLat) && !isNaN(initialLng) && initialLat >= -90 && initialLat <= 90 && initialLng >= -180 && initialLng <= 180) {
-                var initialPoint = new BMap.Point(initialLng, initialLat);
-                map.centerAndZoom(initialPoint, 18);
-                currentMarker = new BMap.Marker(initialPoint);
-                map.addOverlay(currentMarker);
-                currentMarker.enableDragging();
-                currentMarker.addEventListener("dragend", function(e){
-                    latitudeInput.value = e.point.lat.toFixed(6);
-                    longitudeInput.value = e.point.lng.toFixed(6);
-                    updateLocationTextFound(e.point.lat, e.point.lng);
-                });
-                updateLocationTextFound(initialLat, initialLng);
-            } else {
-                var geolocation = new BMap.Geolocation();
-                geolocation.getCurrentPosition(function(r){
-                    if(this.getStatus() == BMAP_STATUS_SUCCESS){
-                        map.panTo(r.point);
-                    }
-                    else {
-                        console.log('Geolocation failed for found form: ' + this.getStatus());
-                    }
-                },{enableHighAccuracy: true});
-            }
-            
-            function updateLocationTextFound(lat, lng) {
-                var geoc = new BMap.Geocoder();
-                geoc.getLocation(new BMap.Point(lng, lat), function(rs){
-                    var addComp = rs.addressComponents;
-                    var address = addComp.province + addComp.city + addComp.district + addComp.street + addComp.streetNumber;
-                    if (selectedLocationSpan) {
-                        if (address && address.trim() !== "") {
-                            selectedLocationSpan.textContent = `已选: ${address} (坐标: ${lat.toFixed(6)}, ${lng.toFixed(6)})`;
-                            selectedLocationSpan.style.color = 'green';
-                            document.getElementById('found_location_text').value = address;
-                        } else {
-                            selectedLocationSpan.textContent = `已选坐标: ${lat.toFixed(6)}, ${lng.toFixed(6)} (无法获取详细地址)`;
-                            selectedLocationSpan.style.color = 'orange';
-                        }
-                    }
-                });
-            }
-
-            map.addEventListener("click", function(e){
+                // Clear previous marker
                 if (currentMarker) {
                     map.removeOverlay(currentMarker);
                 }
-                var clickedPoint = e.point;
-                latitudeInput.value = clickedPoint.lat.toFixed(6);
-                longitudeInput.value = clickedPoint.lng.toFixed(6);
-                
-                currentMarker = new BMap.Marker(clickedPoint);
+                // Add new marker
+                currentMarker = new BMap.Marker(point);
                 map.addOverlay(currentMarker);
-                currentMarker.enableDragging();
-                currentMarker.addEventListener("dragend", function(e_drag){
-                    latitudeInput.value = e_drag.point.lat.toFixed(6);
-                    longitudeInput.value = e_drag.point.lng.toFixed(6);
-                    updateLocationTextFound(e_drag.point.lat, e_drag.point.lng);
+                currentMarker.enableDragging(); // Allow dragging
+                currentMarker.addEventListener("dragend", function(eDrag) {
+                    console.log('[DEBUG] Marker dragged to:', eDrag.point.lat, eDrag.point.lng);
+                    updateLocationFields(eDrag.point); // Update after drag
                 });
-                updateLocationTextFound(clickedPoint.lat, clickedPoint.lng);
+
+                // Geocode the location
+                geocoder.getLocation(point, function(rs) {
+                    var addComp = rs.addressComponents;
+                    var address = addComp.province + addComp.city + addComp.district + addComp.street + addComp.streetNumber;
+                    if (rs.surroundingPois && rs.surroundingPois.length > 0) {
+                        address += " (" + rs.surroundingPois[0].title + ")";
+                    }
+                    console.log('[DEBUG] Geocoder result:', address);
+                    if (address && address.replace(/undefined/g, '').trim() !== '') {
+                        selectedLocationSpan.textContent = `${address} (坐标: ${point.lat.toFixed(6)}, ${point.lng.toFixed(6)})`;
+                        selectedLocationSpan.style.color = 'green';
+                        locationTextInput.value = address;
+                    } else {
+                        selectedLocationSpan.textContent = `坐标: ${point.lat.toFixed(6)}, ${point.lng.toFixed(6)} (无法获取详细地址)`;
+                        selectedLocationSpan.style.color = 'orange';
+                        locationTextInput.value = '';
+                    }
+                });
+            }
+
+            // Map click event: get coordinates and geocode
+            map.addEventListener('click', function(e) {
+                console.log('[DEBUG] Map clicked at:', e.point.lat, e.point.lng);
+                updateLocationFields(e.point);
             });
 
             var searchInput = document.getElementById('found_location_text');
             var autocomplete = new BMap.Autocomplete({
-                "input" : searchInput,
+                "input" : locationTextInput, // 使用正确的输入框ID (found_location_text)
                 "location" : map
             });
 
@@ -322,11 +335,11 @@
                             map.addOverlay(currentMarker);
                             currentMarker.enableDragging();
                             currentMarker.addEventListener("dragend", function(e_drag){
-                                latitudeInput.value = e_drag.point.lat.toFixed(6);
-                                longitudeInput.value = e_drag.point.lng.toFixed(6);
-                                updateLocationTextFound(e_drag.point.lat, e_drag.point.lng);
+                                // When marker from search is dragged, update everything using updateLocationFields
+                                updateLocationFields(e_drag.point);
                             });
-                            updateLocationTextFound(pp.lat, pp.lng);
+                            // After placing marker from search, update everything using updateLocationFields
+                            updateLocationFields(pp);
                         } else {
                             if (selectedLocationSpan) {
                                 selectedLocationSpan.textContent = "未能精确定位: " + myValue + "。请在地图上手动选择。";

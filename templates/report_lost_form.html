@@ -165,10 +165,9 @@
 
     <script>
         const breedsData = {
-            '猫': ['英国短毛猫', '美国短毛猫', '布偶猫', '波斯猫', '暹罗猫', '中华田园猫', '其他品种'],
-            '狗': ['泰迪犬', '金毛寻回犬', '拉布拉多寻回犬', '哈士奇', '柯基犬', '中华田园犬', '其他品种']
-            // Can add more types and breeds here
-        };
+            '猫': ['英国短毛猫', '美国短毛猫', '布偶猫', '波斯猫', '暹罗猫', '缅因猫', '金吉拉', '异国短毛猫', '苏格兰折耳猫', '挪威森林猫', '斯芬克斯猫', '德文卷毛猫', '俄罗斯蓝猫', '中华田园猫', '其他品种'],
+            '狗': ['泰迪犬', '贵宾犬', '比熊犬', '博美犬', '雪纳瑞', '吉娃娃', '巴哥犬', '法国斗牛犬', '英国斗牛犬', '金毛寻回犬', '拉布拉多寻回犬', '哈士奇', '萨摩耶犬', '边境牧羊犬', '柯基犬', '柴犬', '中华田园犬', '其他品种']
+        };    // Can add more types and breeds here
 
         const petTypeSelect = document.getElementById('pet_type');
         const breedSelect = document.getElementById('breed');
@@ -292,67 +291,91 @@
 
             // 1. 创建地图实例
             var map = new BMap.Map(mapContainer);
-            console.log("[DEBUG] BMap instance created.");
+            var geocoder = new BMap.Geocoder(); // 用于逆地址解析
+            var currentMarker = null; // 用于存储当前标记
+            var latitudeInput = document.getElementById('latitude');
+            var longitudeInput = document.getElementById('longitude');
+            var selectedLocationSpan = document.getElementById('selected-coords');
 
-            // 2. 设置地图中心点和缩放级别 (默认为北京天安门)
-            var point = new BMap.Point(116.404, 39.915);
-            map.centerAndZoom(point, 12);
+            // 尝试获取用户当前位置
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    // 成功获取位置
+                    var userLat = position.coords.latitude;
+                    var userLng = position.coords.longitude;
+                    var userPoint = new BMap.Point(userLng, userLat);
+                    
+                    console.log("[DEBUG] User geolocation acquired:", userLat, userLng);
+                    map.centerAndZoom(userPoint, 15); // 以用户位置为中心，并设置缩放级别
+                    updateLocationFields(userPoint); // 使用获取到的用户位置更新信息
 
-            // 3. 开启鼠标滚轮缩放
-            map.enableScrollWheelZoom(true);
+                }, function(error) {
+                    // 获取位置失败或用户拒绝
+                    console.warn("[DEBUG] Geolocation failed or was denied:", error.message);
+                    // 使用默认位置初始化地图 (例如：北京)
+                    var defaultPoint = new BMap.Point(126.63, 45.75); // 哈尔滨市中心
+                    map.centerAndZoom(defaultPoint, 12);
+                    selectedLocationSpan.textContent = '无法获取当前位置。请在地图上点击选择，或搜索地点。当前默认显示哈尔滨。';
+                    selectedLocationSpan.style.color = 'gray';
+                });
+            } else {
+                // 浏览器不支持Geolocation
+                console.warn("[DEBUG] Browser does not support geolocation.");
+                // 使用默认位置初始化地图
+                var defaultPoint = new BMap.Point(126.63, 45.75); // 哈尔滨市中心
+                map.centerAndZoom(defaultPoint, 12);
+                selectedLocationSpan.textContent = '浏览器不支持自动定位。请在地图上点击选择，或搜索地点。当前默认显示哈尔滨。';
+                selectedLocationSpan.style.color = 'gray';
+            }
 
-            // 4. 添加地图控件：缩放和平移
+            // 1. 添加地图控件：平移缩放控件、比例尺控件、缩略地图控件
             map.addControl(new BMap.NavigationControl());
-            // 添加比例尺控件
             map.addControl(new BMap.ScaleControl());
-            // 添加地图类型控件 (地图、卫星、三维 - 如果需要)
-            // map.addControl(new BMap.MapTypeControl()); 
+            map.addControl(new BMap.OverviewMapControl());
+            map.enableScrollWheelZoom(); // 启用滚轮放大缩小
 
-            var currentMarker = null; // 用于存储当前的标记
-            var geoc = new BMap.Geocoder(); // 创建地址解析器实例
+            // Function to update location fields and map marker
+            function updateLocationFields(point) {
+                latitudeInput.value = point.lat.toFixed(6);
+                longitudeInput.value = point.lng.toFixed(6);
 
-            // 5. 添加地图点击事件监听器
-            map.addEventListener('click', function(e){
-                console.log('[DEBUG] Map clicked at:', e.point);
-                var lat = e.point.lat.toFixed(6);
-                var lng = e.point.lng.toFixed(6);
-
-                // 更新隐藏的经纬度输入框
-                document.getElementById('latitude').value = lat;
-                document.getElementById('longitude').value = lng;
-                console.log(`[DEBUG] Hidden fields updated: lat=${lat}, lng=${lng}`);
-
-                // 更新显示的当前选择位置
-                var selectedLocationSpan = document.getElementById('selected-coords');
-                selectedLocationSpan.textContent = `坐标: ${lat}, ${lng}`; // 先显示坐标
-                selectedLocationSpan.style.color = 'orange'; // 标记为正在解析
-
-                // 移除旧标记
+                // Clear previous marker
                 if (currentMarker) {
                     map.removeOverlay(currentMarker);
                 }
-
-                // 创建新标记并添加到地图上
-                var markerPoint = new BMap.Point(lng, lat); // 注意百度是 lng, lat
-                currentMarker = new BMap.Marker(markerPoint);
+                // Add new marker
+                currentMarker = new BMap.Marker(point);
                 map.addOverlay(currentMarker);
-                console.log("[DEBUG] Marker added/updated.");
+                currentMarker.enableDragging(); // Allow dragging
+                currentMarker.addEventListener("dragend", function(eDrag) {
+                    console.log('[DEBUG] Marker dragged to:', eDrag.point.lat, eDrag.point.lng);
+                    updateLocationFields(eDrag.point); // Update after drag
+                });
 
-                // 6. 逆地址解析：将坐标转换为地址
-                geoc.getLocation(markerPoint, function(rs){
+                // Geocode the location
+                geocoder.getLocation(point, function(rs) {
                     var addComp = rs.addressComponents;
                     var address = addComp.province + addComp.city + addComp.district + addComp.street + addComp.streetNumber;
+                    if (rs.surroundingPois && rs.surroundingPois.length > 0) {
+                        address += " (" + rs.surroundingPois[0].title + ")";
+                    }
                     console.log('[DEBUG] Geocoder result:', address);
-                    if (address) {
-                        selectedLocationSpan.textContent = `${address} (坐标: ${lat}, ${lng})`;
-                        selectedLocationSpan.style.color = 'green'; // 标记为有效
-                         // 同时更新关键词输入框
+                    if (address && address.replace(/undefined/g, '').trim() !== '') {
+                        selectedLocationSpan.textContent = `${address} (坐标: ${point.lat.toFixed(6)}, ${point.lng.toFixed(6)})`;
+                        selectedLocationSpan.style.color = 'green';
                         document.getElementById('lost_location_text').value = address;
                     } else {
-                        selectedLocationSpan.textContent = `坐标: ${lat}, ${lng} (无法获取地址)`;
-                        selectedLocationSpan.style.color = 'red';
+                        selectedLocationSpan.textContent = `坐标: ${point.lat.toFixed(6)}, ${point.lng.toFixed(6)} (无法获取详细地址)`;
+                        selectedLocationSpan.style.color = 'orange'; // Use orange for valid coords but no address
+                         document.getElementById('lost_location_text').value = ''; // Clear text if address is not found
                     }
                 });
+            }
+
+            // Map click event: get coordinates and geocode
+            map.addEventListener('click', function(e) {
+                console.log('[DEBUG] Map clicked at:', e.point.lat, e.point.lng);
+                updateLocationFields(e.point);
             });
 
             // 7. 实现地点搜索输入框的自动建议功能

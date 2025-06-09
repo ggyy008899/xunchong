@@ -12,6 +12,7 @@
     </style>
 </head>
 <body>
+    <div class="container">
     <h1>
         {% if report_type == 'lost' %}
             寻找宠物 - 启事大厅
@@ -21,6 +22,14 @@
             宠物寻回 - 启事大厅 {# Default or 'all' #}
         {% endif %}
     </h1>
+
+    <nav class="main-nav">
+        <a href="{{ url_for('index') }}" class="{% if not report_type or report_type == 'all' %}active{% endif %}">所有启事</a>
+        <a href="{{ url_for('index', report_type='lost') }}" class="{% if report_type == 'lost' %}active{% endif %}">寻找宠物</a>
+        <a href="{{ url_for('index', report_type='found') }}" class="{% if report_type == 'found' %}active{% endif %}">寻找主人</a>
+        <a href="{{ url_for('report_lost') }}">发布寻宠</a>
+        <a href="{{ url_for('report_found') }}">发布招领</a>
+    </nav>
 
     {# --- 添加搜索/筛选表单 --- #}
     <form method="GET" action="{{ url_for('index') }}" class="search-form">
@@ -159,38 +168,10 @@
                 <div class="alert alert-{{ category or 'info' }}">{{ message }}</div>
             {% endfor %}
             </div>
-            <style>
-                .alert {
-                    padding: 15px;
-                    margin-bottom: 20px;
-                    border: 1px solid transparent;
-                    border-radius: 4px;
-                }
-                .alert-success {
-                    color: #155724;
-                    background-color: #d4edda;
-                    border-color: #c3e6cb;
-                }
-                .alert-error {
-                    color: #721c24;
-                    background-color: #f8d7da;
-                    border-color: #f5c6cb;
-                }
-                .alert-info {
-                    color: #0c5460;
-                    background-color: #d1ecf1;
-                    border-color: #bee5eb;
-                }
-            </style>
         {% endif %}
     {% endwith %}
     {# ----------------------- #}
 
-    <!-- Example links (will be replaced by actual UI) -->
-    <div style="margin-top: 30px; text-align: center;">
-        <a href="{{ url_for('report_lost') }}" class="button">发布寻宠启事</a>
-        <a href="{{ url_for('report_found') }}" class="button">发布招领启事</a>
-    </div>
-
+    </div> <!-- close .container -->
 </body>
 </html>
