@@ -12,7 +12,78 @@ import hashlib # Import hashlib for SHA1
 from sqlalchemy import desc # For explicit descending order
 import xml.etree.ElementTree as ET # For parsing WeChat XML
 import time # For CreateTime in WeChat messages
+from PIL import Image, UnidentifiedImageError
 
+# Helper function for image compression
+def compress_image(image_path, max_width=1024, quality_jpeg=85):
+    print(f"--- compress_image called for: {image_path} ---")
+    """
+    Compresses an image by resizing if it exceeds max_width and adjusting quality.
+    Overwrites the original image file.
+    """
+    try:
+        img = Image.open(image_path)
+        original_format = img.format # Store original format
+        
+        # Ensure image is in a mode that supports saving (e.g., convert P mode with palette to RGBA)
+        if img.mode == 'P': # Palette mode
+            img = img.convert("RGBA")
+        elif img.mode == 'LA': # Luminance Alpha
+             img = img.convert("RGBA")
+        elif img.mode not in ("RGB", "RGBA", "L"): # L is grayscale
+            current_app.logger.warning(f"Image {image_path} has an unsupported mode {img.mode} for direct saving, attempting conversion to RGBA.")
+            img = img.convert("RGBA")
+            original_format = 'PNG' # After conversion to RGBA, PNG is a safer bet for saving
+
+        current_width, current_height = img.size
+        if current_width > max_width:
+            ratio = max_width / current_width
+            new_height = int(current_height * ratio)
+            img = img.resize((max_width, new_height), Image.Resampling.LANCZOS) 
+            current_app.logger.info(f"Resized image {image_path} from {current_width}x{current_height} to {max_width}x{new_height}")
+
+        save_params = {}
+        fmt = original_format.upper() if original_format else ''
+
+        if fmt in ['JPEG', 'JPG']:
+            save_params['format'] = 'JPEG'
+            save_params['quality'] = quality_jpeg
+            save_params['optimize'] = True 
+        elif fmt == 'PNG':
+            save_params['format'] = 'PNG'
+            save_params['optimize'] = True
+        elif fmt == 'GIF':
+            save_params['format'] = 'GIF'
+        elif fmt == 'WEBP':
+            save_params['format'] = 'WEBP'
+            save_params['quality'] = quality_jpeg 
+        else:
+            if img.mode == "RGBA" and fmt not in ['PNG', 'WEBP']:
+                 current_app.logger.warning(f"Image {image_path} (format: {fmt}, mode: {img.mode}) was likely converted or is unhandled; saving as PNG.")
+                 save_params['format'] = 'PNG'
+                 save_params['optimize'] = True
+            elif fmt: 
+                save_params['format'] = original_format
+                current_app.logger.info(f"Image {image_path} format '{fmt}' not explicitly handled for quality/optimization, saving with original format.")
+            else: 
+                current_app.logger.warning(f"Image {image_path} has unknown format. Saving as PNG as a fallback.")
+                save_params['format'] = 'PNG'
+                save_params['optimize'] = True
+        
+        if save_params.get('format') == 'JPEG' and img.mode == 'RGBA':
+            img = img.convert('RGB')
+            current_app.logger.info(f"Converted RGBA image {image_path} to RGB for JPEG saving.")
+
+        img.save(image_path, **save_params)
+        current_app.logger.info(f"Compressed and saved image {image_path} with parameters: {save_params}")
+        print(f"--- compress_image successfully saved: {image_path} with params {save_params} ---")
+
+    except UnidentifiedImageError:
+        current_app.logger.error(f"Cannot identify image file {image_path}. It might be corrupted or not a valid image format supported by Pillow.")
+    except FileNotFoundError:
+        current_app.logger.error(f"Image file not found at {image_path} during compression attempt.")
+    except Exception as e:
+        current_app.logger.error(f"An unexpected error occurred during image compression for {image_path}: {e}", exc_info=True)
 def create_app(config_class=Config):
     app = Flask(__name__)
 
@@ -51,6 +122,10 @@ def create_app(config_class=Config):
     migrate = Migrate(app, db)
 
     # A simple route for the homepage (will be an H5 page)
+    @app.route('/ping')
+    def ping():
+        return "pong"
+
     @app.route('/')
     def index():
         # --- 获取 report_type 参数，用于区分显示寻宠还是招领 --- 
@@ -309,8 +384,11 @@ def create_app(config_class=Config):
                         # Construct save path
                         save_path = os.path.join(upload_folder_path, unique_filename)
                         file.save(save_path)
-                        
-                        # Generate URL using the unique filename
+                        try:
+                            compress_image(save_path)
+                            current_app.logger.info(f"Successfully compressed uploaded image: {unique_filename} at {save_path}")
+                        except Exception as e:
+                            current_app.logger.error(f"Error compressing image {unique_filename} at {save_path}: {e}", exc_info=True)
                         file_url = url_for('static', filename=f'uploads/{unique_filename}')
                         photo_urls.append(file_url)
                     except Exception as e:
@@ -373,7 +451,7 @@ def create_app(config_class=Config):
     # --- Route for submitting Pet Found reports (招领启事) ---
     @app.route('/report/found', methods=['GET', 'POST'])
     def report_found():
-        form_data = request.form.to_dict() # For repopulating form on GET or error
+        form_data = request.form.to_dict()  # For repopulating form on GET or error
         baidu_map_ak = current_app.config.get('BAIDU_MAP_API_KEY')
         if not baidu_map_ak:
             current_app.logger.warning("BAIDU_MAP_API_KEY for report_found is not set. Map functionality will be affected.")
@@ -393,12 +471,17 @@ def create_app(config_class=Config):
                         file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
                         try:
                             file.save(file_path)
+                            try:
+                                compress_image(file_path)
+                                current_app.logger.info(f"Successfully compressed uploaded image: {filename} at {file_path}")
+                            except Exception as e:
+                                current_app.logger.error(f"Error compressing image {filename} at {file_path}: {e}", exc_info=True)
                             photo_urls.append(url_for('static', filename=f'uploads/{filename}', _external=True))
                         except Exception as e:
                             current_app.logger.error(f"Error saving uploaded file: {e}")
                             flash('上传照片时出错，请检查文件或稍后再试。', 'error')
                             return render_template('report_found_form.html', title='发布招领启事 - 必填项缺失', form_data=form_data, recent_lost_reports=recent_lost_reports, baidu_map_ak=baidu_map_ak)
-                    elif file.filename != '': # If file exists but is not allowed
+                    elif file.filename != '':  # If file exists but is not allowed
                         _, ext = os.path.splitext(file.filename)
                         allowed_extensions_str = ', '.join(current_app.config['ALLOWED_EXTENSIONS'])
                         flash(f'文件类型 "{ext}" 不被允许。请上传以下类型的文件: {allowed_extensions_str}。', 'error')
@@ -413,8 +496,8 @@ def create_app(config_class=Config):
                     flash('选择了“其他品种”但未填写具体品种名称。', 'error')
                     return render_template('report_found_form.html', title='发布招领启事 - 品种错误', form_data=form_data, recent_lost_reports=recent_lost_reports, baidu_map_ak=baidu_map_ak)
                 actual_breed = other_breed_value
-            elif not breed: # If breed is optional and not selected, set to None or empty string based on model
-                actual_breed = None # Or '' if your model prefers empty strings for nullable charfields
+            elif not breed:  # If breed is optional and not selected, set to None or empty string based on model
+                actual_breed = None  # Or '' if your model prefers empty strings for nullable charfields
 
             # --- Parse Found Time ---
             found_time_str = request.form.get('found_time')
@@ -442,7 +525,7 @@ def create_app(config_class=Config):
             except ValueError:
                 current_app.logger.warning(f"Invalid latitude/longitude format received for found pet: lat='{latitude}', lon='{longitude}'")
                 # Optionally, flash an error message, but map selection should prevent this.
-                pass # Allow submission, coordinates will be null
+                pass  # Allow submission, coordinates will be null
 
             try:
                 new_found_report = PetFoundReport(
@@ -456,12 +539,12 @@ def create_app(config_class=Config):
                     contact_info=request.form['contact_info'],
                     latitude=lat_float,
                     longitude=lon_float,
-                    _photo_urls=json.dumps(photo_urls) if photo_urls else None # Store as JSON string
+                    _photo_urls=json.dumps(photo_urls) if photo_urls else None  # Store as JSON string
                 )
                 db.session.add(new_found_report)
                 db.session.commit()
                 flash('招领启事发布成功！', 'success')
-                return redirect(url_for('index')) # Or a different success page
+                return redirect(url_for('index'))  # Or a different success page
             except Exception as e:
                 db.session.rollback()
                 current_app.logger.error(f"Error creating found report: {e}")
