@@ -19,6 +19,8 @@ class PetLostReport(db.Model):
     gender = db.Column(db.String(10), nullable=True) # 性别 (公, 母, 未知)
     age = db.Column(db.String(50), nullable=True) # 年龄描述 (例如 '约2岁', '幼年', '成年')
     features = db.Column(db.Text, nullable=False) # 特征描述
+    pet_name = db.Column(db.String(100), nullable=True) # 宠物名字 (可选)
+    additional_info = db.Column(db.Text, nullable=True) # 想说的话 (可选)
 
     # --- 丢失/找到信息 ---
     lost_time = db.Column(db.DateTime, nullable=False, default=datetime.utcnow) # 丢失时间

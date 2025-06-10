@@ -63,6 +63,8 @@
     {# ----------------------------- #}
 
     <form action="{{ url_for('report_lost') }}" method="post" enctype="multipart/form-data">
+        <label for="pet_name">宠物名字:</label>
+        <input type="text" id="pet_name" name="pet_name" placeholder="例如: 旺财, 咪咪 (选填)" value="{{ form_data.pet_name if form_data else '' }}">
         <label for="pet_type" class="required">宠物种类:</label>
         <select id="pet_type" name="pet_type" required>
             <option value="" {% if not form_data or form_data.pet_type == '' %}selected{% endif %}>请选择</option>
@@ -100,6 +102,10 @@
         <label for="features" class="required">明显特征描述:</label>
         <textarea id="features" name="features" required>{{ form_data.features if form_data else '' }}</textarea>
 
+        <label for="additional_info">想说的话:</label>
+        <textarea id="additional_info" name="additional_info">{{ form_data.additional_info if form_data else '' }}</textarea>
+
+
         <label for="lost_time" class="required">丢失时间:</label>
         <input type="datetime-local" id="lost_time" name="lost_time" required value="{{ form_data.lost_time if form_data else '' }}">
 
@@ -121,6 +127,7 @@
 
         <label for="photos">宠物照片:</label>
         <input type="file" id="photos" name="photos" multiple accept="image/*">
+        <small style="display: block; margin-top: 5px; color: #555;">建议上传1-3张不同角度的照片，以便更好地识别。最多上传3张。</small>
         <div id="image-preview-container" style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 10px;"></div>
 
         <button type="submit">提交寻宠启事</button>

@@ -16,7 +16,6 @@ from PIL import Image, UnidentifiedImageError
 
 # Helper function for image compression
 def compress_image(image_path, max_width=1024, quality_jpeg=85):
-    print(f"--- compress_image called for: {image_path} ---")
     """
     Compresses an image by resizing if it exceeds max_width and adjusting quality.
     Overwrites the original image file.
@@ -76,7 +75,6 @@ def compress_image(image_path, max_width=1024, quality_jpeg=85):
 
         img.save(image_path, **save_params)
         current_app.logger.info(f"Compressed and saved image {image_path} with parameters: {save_params}")
-        print(f"--- compress_image successfully saved: {image_path} with params {save_params} ---")
 
     except UnidentifiedImageError:
         current_app.logger.error(f"Cannot identify image file {image_path}. It might be corrupted or not a valid image format supported by Pillow.")
@@ -128,7 +126,11 @@ def create_app(config_class=Config):
 
     @app.route('/')
     def index():
-        # --- 获取 report_type 参数，用于区分显示寻宠还是招领 --- 
+        # 合规要求首页自动跳转到静态学习演示页
+        from flask import send_from_directory
+        return send_from_directory('static', 'index.html')
+
+    # --- 获取 report_type 参数，用于区分显示寻宠还是招领 --- 
         report_type_filter = request.args.get('report_type', 'all') # 'lost', 'found', or 'all'
 
         # --- 获取搜索参数 --- 
@@ -361,7 +363,17 @@ def create_app(config_class=Config):
 
             # --- Handle file uploads --- 
             photo_urls = []
-            uploaded_files = request.files.getlist('photos')
+            uploaded_files_from_form = request.files.getlist('photos')
+            actual_uploaded_files = [f for f in uploaded_files_from_form if f and f.filename] # Filter out empty/no-filename entries
+
+            if len(actual_uploaded_files) > 3:
+                flash('最多只能上传3张照片。请选择不超过3张照片后重新提交。', 'error')
+                # form_data, baidu_map_ak, and recent_found_reports are already in scope
+                return render_template('report_lost_form.html',
+                                       title='发布寻宠启事 - 图片过多',
+                                       form_data=form_data,
+                                       baidu_map_ak=baidu_map_ak,
+                                       recent_found_reports=recent_found_reports)
             # Use current_app to access config within request context
             upload_folder_path = current_app.config.get('UPLOAD_FOLDER')
 
@@ -369,7 +381,7 @@ def create_app(config_class=Config):
                 flash('服务器上传文件夹配置错误。', 'error')
                 return render_template('report_lost_form.html', title='发布寻宠启事 - 必填项缺失', form_data=form_data, baidu_map_ak=baidu_map_ak, recent_found_reports=recent_found_reports)
 
-            for file in uploaded_files:
+            for file in actual_uploaded_files: # Iterate over the filtered and validated list
                 if file and file.filename != '':
                     try:
                         # Get original filename and extension
@@ -389,8 +401,8 @@ def create_app(config_class=Config):
                             current_app.logger.info(f"Successfully compressed uploaded image: {unique_filename} at {save_path}")
                         except Exception as e:
                             current_app.logger.error(f"Error compressing image {unique_filename} at {save_path}: {e}", exc_info=True)
-                        file_url = url_for('static', filename=f'uploads/{unique_filename}')
-                        photo_urls.append(file_url)
+                        # 只保存文件名，不保存完整url
+                        photo_urls.append(unique_filename)
                     except Exception as e:
                         flash(f'图片上传失败: {e}', 'error')
                         # Consider if partial success is acceptable or should halt
@@ -427,6 +439,8 @@ def create_app(config_class=Config):
                     gender=request.form['gender'],
                     age=request.form.get('age'),
                     features=request.form['features'],
+                    pet_name=request.form.get('pet_name'), # Optional field
+                    additional_info=request.form.get('additional_info'), # Optional field
                     lost_time=lost_time_dt, # Use parsed datetime
                     lost_location_text=request.form['lost_location_text'],
                     latitude=lat_float,   # 保存纬度
@@ -464,7 +478,7 @@ def create_app(config_class=Config):
             photo_urls = []
             if 'photos' in request.files:
                 files = request.files.getlist('photos')
-                for file in files:
+                for file in files[:3]: # Limit to 3 photos
                     if file and file.filename != '' and '.' in file.filename and \
                        file.filename.rsplit('.', 1)[1].lower() in current_app.config['ALLOWED_EXTENSIONS']:
                         filename = secure_filename(str(uuid.uuid4()) + os.path.splitext(file.filename)[1])
