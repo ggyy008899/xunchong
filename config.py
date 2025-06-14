@@ -28,3 +28,7 @@ class Config:
     TENCENT_MAP_API_KEY = os.environ.get('TENCENT_MAP_API_KEY')
     # --- 百度地图 API Key (新增) ---
     BAIDU_MAP_API_KEY = os.environ.get('BAIDU_MAP_API_KEY')
+    # 微信公众号配置
+WECHAT_APPID = 'wxe07ebc51757de00c'  # 替换成您的 AppID
+WECHAT_APPSECRET = 'f4243f138d39cfcc4211b648cfaef078'  # 替换成您的 AppSecret
+WECHAT_REDIRECT_URI = 'http://hebpet.online/wechat/callback' # 微信授权后的回调地址，域名部分需要与公众号后台配置一致
